@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "local-whisper-transcriber"
+version = "0.1.0"
+description = "Windows desktop app for local Whisper transcription from audio, video, and YouTube sources."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "faster-whisper>=1.1.1,<2.0.0",
+    "PySide6>=6.9.0,<7.0.0",
+]
+
+[project.scripts]
+local-whisper-desktop = "app.desktop.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.19.0,<7.0.0",
+    "pytest>=8.4.1,<9.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--basetemp=pytest_tmp -p no:cacheprovider"
