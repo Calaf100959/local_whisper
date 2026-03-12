@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.logging import get_logger
+from app.core.runtime import is_frozen_app
 from app.core.settings import Settings, get_settings
 from app.models.job import JobStatus
 from app.services.chunk_service import ChunkSegment
@@ -222,4 +223,6 @@ class TranscriptionService:
         bundled_model_path = self.settings.bundled_model_path(model_size)
         if bundled_model_path.exists():
             return str(bundled_model_path)
+        if is_frozen_app():
+            raise TranscriptionError(f"Bundled Whisper model '{model_size}' was not found.")
         return model_size

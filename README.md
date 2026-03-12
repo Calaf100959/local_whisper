@@ -48,7 +48,7 @@ powershell -ExecutionPolicy Bypass -File scripts\download_bundle_assets.ps1
 - `resources/bin/yt-dlp.exe`
 - `resources/models/small/model.bin`
 
-詳細は [distribution-guide.md](/c:/Users/h-sueyoshi/Desktop/local_subscription/docs/distribution-guide.md#L1) を参照してください。
+詳細は `docs/distribution-guide.md` を参照してください。
 
 ## 配布物の作成
 デスクトップ配布物を作る:
@@ -76,11 +76,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1
 6. 結果を確認し `テキストファイルで出力する` を押す
 
 ## 出力先
-- 開発実行時: [data/outputs](/c:/Users/h-sueyoshi/Desktop/local_subscription/data/outputs)
+- 開発実行時: `data/outputs`
 - インストール版: `%LOCALAPPDATA%\\local-whisper-transcriber\\data\\outputs`
 
 ログ:
-- 開発実行時: [data/logs](/c:/Users/h-sueyoshi/Desktop/local_subscription/data/logs)
+- 開発実行時: `data/logs`
 - インストール版: `%LOCALAPPDATA%\\local-whisper-transcriber\\logs\\app.log`
 
 ## テスト

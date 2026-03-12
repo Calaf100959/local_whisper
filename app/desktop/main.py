@@ -11,7 +11,8 @@ from app.desktop.window import MainWindow
 def main() -> int:
     configure_logging()
     app = QApplication(sys.argv)
-    app.setApplicationName("Local Whisper Transcriber")
+    app.setApplicationName("ローカル文字起こしデスクトップアプリ")
+    app.setApplicationDisplayName("ローカル文字起こしデスクトップアプリ")
     window = MainWindow()
     window.show()
     return app.exec()

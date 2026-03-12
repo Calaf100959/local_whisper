@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.logging import get_logger
+from app.core.runtime import is_frozen_app
 from app.core.settings import Settings, get_settings
 from app.services.media_service import MediaService
 
@@ -134,6 +135,9 @@ class YouTubeService:
         bundled_path = self.settings.bundled_binary_path(binary_name)
         if bundled_path.exists():
             return str(bundled_path)
+
+        if is_frozen_app():
+            return None
 
         fallback_name = Path(binary_name).stem if binary_name.endswith(".exe") else binary_name
         return shutil.which(binary_name) or shutil.which(fallback_name)

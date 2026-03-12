@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.job_service = JobService()
         self.media_service = MediaService()
         self.transcription_worker = TranscriptionWorker(job_service=self.job_service)
+        self.outputs_dir = self.job_service.settings.outputs_dir
         self.worker_thread: DesktopWorkerThread | None = None
         self.current_job_id: str | None = None
         self.current_result_path: str | None = None
@@ -57,7 +58,7 @@ class MainWindow(QMainWindow):
         self.poll_timer.setInterval(700)
         self.poll_timer.timeout.connect(self.refresh_job_status)
 
-        self.setWindowTitle("Local Whisper Transcriber")
+        self.setWindowTitle("ローカル文字起こしデスクトップアプリ")
         self.resize(980, 760)
         self._build_ui()
         self._wire_events()
@@ -138,9 +139,11 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.export_result_button = QPushButton("テキストファイルで出力する")
         self.export_result_button.setEnabled(False)
+        self.open_output_dir_button = QPushButton("ファイルを確認する")
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.stop_button)
         action_row.addWidget(self.export_result_button)
+        action_row.addWidget(self.open_output_dir_button)
         action_row.addStretch(1)
         layout.addLayout(action_row)
 
@@ -193,6 +196,7 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self.start_transcription)
         self.stop_button.clicked.connect(self.stop_transcription)
         self.export_result_button.clicked.connect(self.export_result_file)
+        self.open_output_dir_button.clicked.connect(self.open_output_directory)
 
     def _set_mode(self, mode: str) -> None:
         self.mode = mode
@@ -213,13 +217,16 @@ class MainWindow(QMainWindow):
             self.file_path_edit.setText(file_path)
 
     def start_transcription(self) -> None:
-        self._reset_status()
-
         try:
             source, input_type = self._resolve_source()
         except Exception as exc:
             self.show_error(to_user_message(exc))
             return
+
+        if not self._confirm_start():
+            return
+
+        self._reset_status()
 
         job = self.job_service.create_job(
             input_type=input_type.value,
@@ -290,6 +297,16 @@ class MainWindow(QMainWindow):
         self.export_result_button.setEnabled(bool(result_path))
         self.refresh_job_status()
 
+        if not self.current_job_id:
+            return
+
+        try:
+            job = self.job_service.get_job(self.current_job_id)
+        except FileNotFoundError:
+            return
+
+        self._prompt_save_result(job.status)
+
     def on_job_failed(self, user_message: str) -> None:
         self.poll_timer.stop()
         self.start_button.setEnabled(True)
@@ -328,6 +345,10 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "出力完了", "テキストファイルを出力しました。")
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination)))
 
+    def open_output_directory(self) -> None:
+        self.outputs_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.outputs_dir)))
+
     def _reset_status(self) -> None:
         self.error_label.setText("")
         self.result_text.clear()
@@ -356,6 +377,37 @@ class MainWindow(QMainWindow):
         }:
             return "算出中"
         return "-"
+
+    def _confirm_start(self) -> bool:
+        response = QMessageBox.question(
+            self,
+            "開始確認",
+            "文字起こしを開始します。OK を押すと処理を開始します。",
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Ok,
+        )
+        return response == QMessageBox.StandardButton.Ok
+
+    def _prompt_save_result(self, status: JobStatus) -> None:
+        if not self.current_result_path:
+            return
+
+        if status == JobStatus.COMPLETED:
+            message = "文字起こしが完了しました。作成されたファイルを保存しますか？"
+        elif status == JobStatus.CANCELLED:
+            message = "文字起こしを停止しました。作成されたファイルを保存しますか？"
+        else:
+            return
+
+        response = QMessageBox.question(
+            self,
+            "保存確認",
+            message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if response == QMessageBox.StandardButton.Yes:
+            self.export_result_file()
 
     @staticmethod
     def _parse_datetime(value: datetime) -> datetime:

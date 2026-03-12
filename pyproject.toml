@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "local-whisper-transcriber"
-version = "0.1.0"
+version = "0.1.1"
 description = "Windows desktop app for local Whisper transcription from audio, video, and YouTube sources."
 readme = "README.md"
 requires-python = ">=3.11"

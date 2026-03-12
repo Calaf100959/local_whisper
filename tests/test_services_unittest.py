@@ -4,13 +4,17 @@ import asyncio
 import unittest
 from pathlib import Path
 import shutil
+from unittest.mock import patch
 from uuid import uuid4
 
 from app.core.settings import Settings
 from app.models.job import JobStatus
 from app.services.chunk_service import ChunkService
+from app.services.ffmpeg_service import FFmpegService
 from app.services.job_service import JobService
 from app.services.media_service import InputType, MediaService
+from app.services.transcription_service import TranscriptionError, TranscriptionService
+from app.services.youtube_service import YouTubeService
 
 
 class FakeUploadFile:
@@ -31,6 +35,8 @@ def build_settings(root: Path) -> Settings:
         jobs_dir=root / "data" / "jobs",
         outputs_dir=root / "data" / "outputs",
         temp_dir=root / "data" / "temp",
+        bundled_bin_dir=root / "resources" / "bin",
+        bundled_models_dir=root / "resources" / "models",
     )
 
 
@@ -101,6 +107,23 @@ class ServiceTests(unittest.TestCase):
             service.build_chunk_path("meeting.wav", chunk_index=3).name,
             "meeting_chunk_0003.wav",
         )
+
+    def test_frozen_build_requires_bundled_binaries(self) -> None:
+        ffmpeg_service = FFmpegService(self.settings)
+        youtube_service = YouTubeService(self.settings)
+
+        with patch("app.services.ffmpeg_service.is_frozen_app", return_value=True):
+            self.assertIsNone(ffmpeg_service._resolve_binary_path("ffmpeg.exe"))
+
+        with patch("app.services.youtube_service.is_frozen_app", return_value=True):
+            self.assertIsNone(youtube_service._resolve_binary_path("yt-dlp.exe"))
+
+    def test_frozen_build_requires_bundled_model(self) -> None:
+        service = TranscriptionService(self.settings)
+
+        with patch("app.services.transcription_service.is_frozen_app", return_value=True):
+            with self.assertRaises(TranscriptionError):
+                service._resolve_model_source("small")
 
 
 if __name__ == "__main__":
