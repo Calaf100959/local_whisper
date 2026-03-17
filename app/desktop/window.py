@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
@@ -27,6 +27,7 @@ from app.core.exceptions import to_user_message
 from app.models.job import Job, JobStatus
 from app.services.job_service import JobService
 from app.services.media_service import InputType, MediaService
+from app.services.result_service import OutputFormat
 from app.workers.transcription_worker import TranscriptionWorker
 from app.desktop.worker_thread import DesktopWorkerThread
 
@@ -60,6 +61,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("ローカル文字起こしデスクトップアプリ")
         self.resize(980, 760)
+        self.setAcceptDrops(True)
         self._build_ui()
         self._wire_events()
         self._set_mode("audio")
@@ -116,13 +118,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.url_row_widget)
 
         settings_grid = QGridLayout()
-        settings_grid.addWidget(QLabel("モデルサイズ"), 0, 0)
-        self.model_combo = QComboBox()
-        self.model_combo.addItem("tiny", "tiny")
-        self.model_combo.addItem("base", "base")
-        self.model_combo.addItem("small（推奨）", "small")
-        self.model_combo.setCurrentIndex(2)
-        settings_grid.addWidget(self.model_combo, 0, 1)
+        settings_grid.addWidget(QLabel("モデル"), 0, 0)
+        self.model_value = QLabel("small（固定）")
+        settings_grid.addWidget(self.model_value, 0, 1)
 
         settings_grid.addWidget(QLabel("言語"), 0, 2)
         self.language_combo = QComboBox()
@@ -137,7 +135,7 @@ class MainWindow(QMainWindow):
         self.start_button = QPushButton("文字起こし開始")
         self.stop_button = QPushButton("停止")
         self.stop_button.setEnabled(False)
-        self.export_result_button = QPushButton("テキストファイルで出力する")
+        self.export_result_button = QPushButton("結果ファイルを出力する")
         self.export_result_button.setEnabled(False)
         self.open_output_dir_button = QPushButton("ファイルを確認する")
         action_row.addWidget(self.start_button)
@@ -215,6 +213,35 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(self, "ファイルを選択", "", file_filter)
         if file_path:
             self.file_path_edit.setText(file_path)
+            self.error_label.setText("")
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if self._extract_supported_drop_path(event):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        dropped_path = self._extract_supported_drop_path(event)
+        if not dropped_path:
+            event.ignore()
+            return
+
+        try:
+            input_type, resolved = self.media_service.validate_local_file(dropped_path)
+        except Exception as exc:
+            self.show_error(to_user_message(exc))
+            event.ignore()
+            return
+
+        if input_type == InputType.AUDIO:
+            self.audio_mode.setChecked(True)
+        elif input_type == InputType.VIDEO:
+            self.video_mode.setChecked(True)
+
+        self.file_path_edit.setText(str(resolved))
+        self.error_label.setText("")
+        event.acceptProposedAction()
 
     def start_transcription(self) -> None:
         try:
@@ -231,7 +258,7 @@ class MainWindow(QMainWindow):
         job = self.job_service.create_job(
             input_type=input_type.value,
             source_name=Path(source).name if input_type != InputType.YOUTUBE_URL else str(source),
-            model_size=str(self.model_combo.currentData()),
+            model_size=self.job_service.settings.default_model_size,
             language=self.language_combo.currentData(),
         )
         self.current_job_id = job.job_id
@@ -324,25 +351,33 @@ class MainWindow(QMainWindow):
 
     def export_result_file(self) -> None:
         if not self.current_result_path:
-            QMessageBox.warning(self, "結果未作成", "出力できるテキスト結果がありません。")
+            QMessageBox.warning(self, "結果未作成", "出力できる結果ファイルがありません。")
             return
-        source_path = Path(self.current_result_path)
-        if not source_path.exists():
+        text_result_path = Path(self.current_result_path)
+        if not text_result_path.exists():
             QMessageBox.warning(self, "結果ファイル未検出", "結果ファイルが見つかりません。")
             return
 
-        destination_path, _ = QFileDialog.getSaveFileName(
+        destination_path, selected_filter = QFileDialog.getSaveFileName(
             self,
-            "テキストファイルで出力する",
-            str(source_path.with_suffix(".txt")),
-            "Text Files (*.txt)",
+            "結果ファイルを出力する",
+            str(text_result_path),
+            "Text Files (*.txt);;SubRip Files (*.srt);;JSON Files (*.json)",
         )
         if not destination_path:
             return
 
+        output_format = OutputFormat.from_file_name(destination_path, selected_filter)
         destination = Path(destination_path)
+        if destination.suffix.lower() != f".{output_format.value}":
+            destination = destination.with_suffix(f".{output_format.value}")
+
+        source_path = text_result_path.with_suffix(f".{output_format.value}")
+        if not source_path.exists():
+            QMessageBox.warning(self, "結果ファイル未検出", "結果ファイルが見つかりません。")
+            return
         destination.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
-        QMessageBox.information(self, "出力完了", "テキストファイルを出力しました。")
+        QMessageBox.information(self, "出力完了", f"{output_format.value.upper()} ファイルを出力しました。")
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination)))
 
     def open_output_directory(self) -> None:
@@ -393,9 +428,9 @@ class MainWindow(QMainWindow):
             return
 
         if status == JobStatus.COMPLETED:
-            message = "文字起こしが完了しました。作成されたファイルを保存しますか？"
+            message = "文字起こしが完了しました。作成された結果ファイルを保存しますか？"
         elif status == JobStatus.CANCELLED:
-            message = "文字起こしを停止しました。作成されたファイルを保存しますか？"
+            message = "文字起こしを停止しました。作成された結果ファイルを保存しますか？"
         else:
             return
 
@@ -408,6 +443,23 @@ class MainWindow(QMainWindow):
         )
         if response == QMessageBox.StandardButton.Yes:
             self.export_result_file()
+
+    def _extract_supported_drop_path(self, event: QDragEnterEvent | QDropEvent) -> str | None:
+        mime_data = event.mimeData()
+        if not mime_data.hasUrls():
+            return None
+
+        for url in mime_data.urls():
+            if not url.isLocalFile():
+                continue
+            local_path = url.toLocalFile()
+            try:
+                self.media_service.validate_local_file(local_path)
+            except Exception:
+                continue
+            return local_path
+
+        return None
 
     @staticmethod
     def _parse_datetime(value: datetime) -> datetime:

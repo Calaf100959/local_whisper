@@ -10,7 +10,7 @@ from app.services.chunk_service import ChunkService
 from app.services.ffmpeg_service import FFmpegService
 from app.services.job_service import JobService
 from app.services.media_service import InputType
-from app.services.result_service import ResultService
+from app.services.result_service import OutputFormat, ResultService
 from app.services.transcription_service import (
     ChunkTranscriptionInput,
     TranscriptionCancelled,
@@ -152,11 +152,12 @@ class TranscriptionWorker:
         )
 
     def _save_result(self, job_id: str, source_name: str, result: TranscriptionResult) -> Path:
-        return self.result_service.save_text_result(
+        saved_paths = self.result_service.save_all_results(
             job_id=job_id,
             source_name=source_name,
             result=result,
         )
+        return saved_paths[OutputFormat.TXT]
 
     def _cleanup_paths(self, cleanup_paths: set[Path]) -> None:
         for path in sorted(cleanup_paths):

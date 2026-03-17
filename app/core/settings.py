@@ -32,6 +32,7 @@ class Settings:
         "m.youtube.com",
         "youtu.be",
     )
+    supported_model_sizes: tuple[str, ...] = ("small",)
     default_model_size: str = "small"
     default_language: str = "ja"
     whisper_device: str = "cpu"
@@ -64,7 +65,14 @@ class Settings:
         return self.bundled_bin_dir / binary_name
 
     def bundled_model_path(self, model_size: str) -> Path:
-        return self.bundled_models_dir / model_size
+        return self.bundled_models_dir / self.normalize_model_size(model_size)
+
+    def normalize_model_size(self, model_size: str | None) -> str:
+        requested = (model_size or self.default_model_size).strip().lower()
+        if requested not in self.supported_model_sizes:
+            supported = ", ".join(self.supported_model_sizes)
+            raise ValueError(f"Unsupported model size: {requested}. Supported values: {supported}")
+        return requested
 
 
 @lru_cache(maxsize=1)

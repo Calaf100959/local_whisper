@@ -57,7 +57,7 @@ class TranscriptionService:
         self._model_cache: dict[str, Any] = {}
 
     def load_model(self, model_size: str | None = None) -> Any:
-        requested_model_size = model_size or self.settings.default_model_size
+        requested_model_size = self.settings.normalize_model_size(model_size)
         if requested_model_size in self._model_cache:
             return self._model_cache[requested_model_size]
 
@@ -220,9 +220,10 @@ class TranscriptionService:
         raise TranscriptionCancelled(partial_result or TranscriptionResult(text="", segments=[]))
 
     def _resolve_model_source(self, model_size: str) -> str:
-        bundled_model_path = self.settings.bundled_model_path(model_size)
+        normalized_model_size = self.settings.normalize_model_size(model_size)
+        bundled_model_path = self.settings.bundled_model_path(normalized_model_size)
         if bundled_model_path.exists():
             return str(bundled_model_path)
         if is_frozen_app():
-            raise TranscriptionError(f"Bundled Whisper model '{model_size}' was not found.")
-        return model_size
+            raise TranscriptionError(f"Bundled Whisper model '{normalized_model_size}' was not found.")
+        return normalized_model_size

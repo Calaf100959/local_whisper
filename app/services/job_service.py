@@ -30,7 +30,7 @@ class JobService:
             job_id=self.generate_job_id(),
             input_type=input_type,
             source_name=source_name,
-            model_size=model_size or self.settings.default_model_size,
+            model_size=self.settings.normalize_model_size(model_size),
             language=language or self.settings.default_language,
         )
         self._save_job(job)
