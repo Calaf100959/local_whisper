@@ -109,9 +109,15 @@ class ResultService:
         source_name: str,
         output_format: OutputFormat,
     ) -> Path:
+        output_dir = self.build_output_directory(job_id=job_id, source_name=source_name)
+        file_name = f"{output_dir.name}.{output_format.value}"
+        return output_dir / file_name
+
+    def build_output_directory(self, *, job_id: str, source_name: str) -> Path:
         safe_stem = self._sanitize_file_stem(source_name)
-        file_name = f"{safe_stem}_{job_id}.{output_format.value}"
-        return self.settings.outputs_dir / file_name
+        output_dir = self.settings.outputs_dir / f"{safe_stem}_{job_id}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir
 
     def _sanitize_file_stem(self, source_name: str) -> str:
         raw_stem = Path(source_name).stem.strip() or "transcript"

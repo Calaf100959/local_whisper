@@ -332,7 +332,7 @@ class MainWindow(QMainWindow):
         except FileNotFoundError:
             return
 
-        self._prompt_save_result(job.status)
+        self._prompt_review_result(job.status)
 
     def on_job_failed(self, user_message: str) -> None:
         self.poll_timer.stop()
@@ -381,8 +381,9 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination)))
 
     def open_output_directory(self) -> None:
-        self.outputs_dir.mkdir(parents=True, exist_ok=True)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.outputs_dir)))
+        directory = self._get_current_result_directory()
+        directory.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory)))
 
     def _reset_status(self) -> None:
         self.error_label.setText("")
@@ -423,26 +424,31 @@ class MainWindow(QMainWindow):
         )
         return response == QMessageBox.StandardButton.Ok
 
-    def _prompt_save_result(self, status: JobStatus) -> None:
+    def _prompt_review_result(self, status: JobStatus) -> None:
         if not self.current_result_path:
             return
 
         if status == JobStatus.COMPLETED:
-            message = "文字起こしが完了しました。作成された結果ファイルを保存しますか？"
+            message = "文字起こしが完了しました。文字起こし結果を確認しますか？"
         elif status == JobStatus.CANCELLED:
-            message = "文字起こしを停止しました。作成された結果ファイルを保存しますか？"
+            message = "文字起こしを停止しました。保存済みの文字起こし結果を確認しますか？"
         else:
             return
 
         response = QMessageBox.question(
             self,
-            "保存確認",
+            "確認",
             message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
         if response == QMessageBox.StandardButton.Yes:
-            self.export_result_file()
+            self.open_output_directory()
+
+    def _get_current_result_directory(self) -> Path:
+        if self.current_result_path:
+            return Path(self.current_result_path).parent
+        return self.outputs_dir
 
     def _extract_supported_drop_path(self, event: QDragEnterEvent | QDropEvent) -> str | None:
         mime_data = event.mimeData()

@@ -118,13 +118,19 @@ class ServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(set(saved_paths.keys()), {OutputFormat.TXT, OutputFormat.SRT, OutputFormat.JSON})
+        output_dir = saved_paths[OutputFormat.TXT].parent
+        self.assertTrue(output_dir.is_dir())
+        self.assertEqual(output_dir.name, "sample_job_123")
         self.assertEqual(saved_paths[OutputFormat.TXT].read_text(encoding="utf-8"), "1行目\n2行目")
+        self.assertEqual(saved_paths[OutputFormat.TXT].name, "sample_job_123.txt")
         srt_text = saved_paths[OutputFormat.SRT].read_text(encoding="utf-8")
         self.assertIn("00:00:00,000 --> 00:00:01,250", srt_text)
         self.assertIn("1行目", srt_text)
+        self.assertEqual(saved_paths[OutputFormat.SRT].name, "sample_job_123.srt")
         json_text = saved_paths[OutputFormat.JSON].read_text(encoding="utf-8")
         self.assertIn('"language": "ja"', json_text)
         self.assertIn('"start_seconds": 1.5', json_text)
+        self.assertEqual(saved_paths[OutputFormat.JSON].name, "sample_job_123.json")
 
     def test_chunk_service_generates_expected_chunks(self) -> None:
         service = ChunkService(self.settings)
