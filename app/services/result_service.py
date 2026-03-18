@@ -44,7 +44,7 @@ class ResultService:
             source_name=source_name,
             output_format=OutputFormat.TXT,
         )
-        output_path.write_text(result.text, encoding="utf-8")
+        output_path.write_text(result.render_text(include_speakers=True), encoding="utf-8")
         return output_path
 
     def save_srt_result(
@@ -81,6 +81,7 @@ class ResultService:
                 {
                     "start_seconds": segment.start_seconds,
                     "end_seconds": segment.end_seconds,
+                    "speaker": segment.speaker,
                     "text": segment.text,
                 }
                 for segment in result.segments
@@ -131,6 +132,8 @@ class ResultService:
             text = segment.text.strip()
             if not text:
                 continue
+            if segment.speaker:
+                text = f"[{segment.speaker}] {text}"
             lines.extend(
                 [
                     str(index),

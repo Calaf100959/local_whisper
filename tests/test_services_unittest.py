@@ -11,10 +11,12 @@ from uuid import uuid4
 from app.core.settings import Settings
 from app.models.job import JobStatus
 from app.services.chunk_service import ChunkService
+from app.services.diarization_service import DiarizationService, DiarizedSegment
 from app.services.ffmpeg_service import FFmpegService
 from app.services.job_service import JobService
 from app.services.media_service import InputType, MediaService
 from app.services.result_service import OutputFormat, ResultService
+from app.services.speaker_assignment_service import SpeakerAssignmentService
 from app.services.transcription_service import TranscriptionError, TranscriptionService
 from app.services.transcription_service import TranscribedSegment, TranscriptionResult
 from app.services.youtube_service import YouTubeService
@@ -38,6 +40,7 @@ def build_settings(root: Path) -> Settings:
         jobs_dir=root / "data" / "jobs",
         outputs_dir=root / "data" / "outputs",
         temp_dir=root / "data" / "temp",
+        downloaded_models_dir=root / "data" / "models",
         bundled_bin_dir=root / "resources" / "bin",
         bundled_models_dir=root / "resources" / "models",
     )
@@ -57,11 +60,18 @@ class ServiceTests(unittest.TestCase):
     def test_job_service_create_and_update(self) -> None:
         service = JobService(self.settings)
 
-        job = service.create_job(input_type="audio", source_name="sample.wav")
+        job = service.create_job(
+            input_type="audio",
+            source_name="sample.wav",
+            diarization_enabled=True,
+            diarization_num_speakers=2,
+        )
         saved_path = self.settings.jobs_dir / f"{job.job_id}.json"
 
         self.assertTrue(saved_path.exists())
         self.assertEqual(job.status, JobStatus.QUEUED)
+        self.assertTrue(job.diarization_enabled)
+        self.assertEqual(job.diarization_num_speakers, 2)
 
         updated = service.update_status(job.job_id, JobStatus.TRANSCRIBING)
         progressed = service.update_progress(
@@ -117,8 +127,8 @@ class ServiceTests(unittest.TestCase):
             text="1行目\n2行目",
             language="ja",
             segments=[
-                TranscribedSegment(start_seconds=0.0, end_seconds=1.25, text="1行目"),
-                TranscribedSegment(start_seconds=1.5, end_seconds=3.0, text="2行目"),
+                TranscribedSegment(start_seconds=0.0, end_seconds=1.25, text="1行目", speaker="SPEAKER_00"),
+                TranscribedSegment(start_seconds=1.5, end_seconds=3.0, text="2行目", speaker="SPEAKER_01"),
             ],
         )
 
@@ -132,15 +142,19 @@ class ServiceTests(unittest.TestCase):
         output_dir = saved_paths[OutputFormat.TXT].parent
         self.assertTrue(output_dir.is_dir())
         self.assertEqual(output_dir.name, "sample_job_123")
-        self.assertEqual(saved_paths[OutputFormat.TXT].read_text(encoding="utf-8"), "1行目\n2行目")
+        self.assertEqual(
+            saved_paths[OutputFormat.TXT].read_text(encoding="utf-8"),
+            "[SPEAKER_00] 1行目\n[SPEAKER_01] 2行目",
+        )
         self.assertEqual(saved_paths[OutputFormat.TXT].name, "sample_job_123.txt")
         srt_text = saved_paths[OutputFormat.SRT].read_text(encoding="utf-8")
         self.assertIn("00:00:00,000 --> 00:00:01,250", srt_text)
-        self.assertIn("1行目", srt_text)
+        self.assertIn("[SPEAKER_00] 1行目", srt_text)
         self.assertEqual(saved_paths[OutputFormat.SRT].name, "sample_job_123.srt")
         json_text = saved_paths[OutputFormat.JSON].read_text(encoding="utf-8")
         self.assertIn('"language": "ja"', json_text)
         self.assertIn('"start_seconds": 1.5', json_text)
+        self.assertIn('"speaker": "SPEAKER_01"', json_text)
         self.assertEqual(saved_paths[OutputFormat.JSON].name, "sample_job_123.json")
 
     def test_chunk_service_generates_expected_chunks(self) -> None:
@@ -211,6 +225,62 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(updated_job.processed_seconds, 8.0)
         self.assertEqual(updated_job.total_seconds, 12.0)
         self.assertIsNotNone(updated_job.transcription_started_at)
+
+    def test_speaker_assignment_service_assigns_max_overlap_speaker(self) -> None:
+        service = SpeakerAssignmentService()
+        result = TranscriptionResult(
+            text="",
+            language="ja",
+            segments=[
+                TranscribedSegment(start_seconds=0.0, end_seconds=1.0, text="A"),
+                TranscribedSegment(start_seconds=1.0, end_seconds=3.0, text="B"),
+            ],
+        )
+        diarized_segments = [
+            DiarizedSegment(start_seconds=0.0, end_seconds=1.5, speaker="SPEAKER_00"),
+            DiarizedSegment(start_seconds=1.5, end_seconds=3.0, speaker="SPEAKER_01"),
+        ]
+
+        assigned = service.assign_speakers(result, diarized_segments)
+
+        self.assertEqual(assigned.segments[0].speaker, "SPEAKER_00")
+        self.assertEqual(assigned.segments[1].speaker, "SPEAKER_01")
+        self.assertEqual(assigned.render_text(include_speakers=True), "[SPEAKER_00] A\n[SPEAKER_01] B")
+
+    def test_diarization_service_prefers_downloaded_model_when_bundled_model_is_incomplete(self) -> None:
+        service = DiarizationService(self.settings)
+        bundled_dir = self.settings.bundled_diarization_model_path()
+        bundled_dir.mkdir(parents=True, exist_ok=True)
+        downloaded_dir = self.settings.downloaded_diarization_model_path()
+        downloaded_dir.mkdir(parents=True, exist_ok=True)
+        (downloaded_dir / "hyperparams.yaml").write_text("modules: {}", encoding="utf-8")
+        (downloaded_dir / "embedding_model.ckpt").write_bytes(b"weights")
+
+        model_source, savedir = service._resolve_embedding_model_source()
+
+        self.assertEqual(model_source, str(downloaded_dir))
+        self.assertEqual(savedir, str(downloaded_dir))
+
+    def test_diarization_service_uses_public_model_when_local_model_is_missing(self) -> None:
+        service = DiarizationService(self.settings)
+
+        def fake_download(target_dir: Path) -> None:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (target_dir / "hyperparams.yaml").write_text("modules: {}", encoding="utf-8")
+            (target_dir / "embedding_model.ckpt").write_bytes(b"weights")
+
+        with patch.object(service, "_download_embedding_model_snapshot", side_effect=fake_download):
+            model_source, savedir = service._resolve_embedding_model_source()
+
+        self.assertEqual(model_source, str(self.settings.downloaded_diarization_model_path()))
+        self.assertEqual(savedir, str(self.settings.downloaded_diarization_model_path()))
+
+    def test_diarization_service_normalizes_cluster_labels_by_first_appearance(self) -> None:
+        service = DiarizationService(self.settings)
+
+        normalized = service._normalize_cluster_labels([4, 4, 1, 7, 1])
+
+        self.assertEqual(normalized, [0, 0, 1, 2, 1])
 
 
 if __name__ == "__main__":

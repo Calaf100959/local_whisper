@@ -22,6 +22,7 @@ class Settings:
     jobs_dir: Path = field(default_factory=lambda: get_user_data_root() / "jobs")
     outputs_dir: Path = field(default_factory=lambda: get_user_data_root() / "outputs")
     temp_dir: Path = field(default_factory=lambda: get_user_data_root() / "temp")
+    downloaded_models_dir: Path = field(default_factory=lambda: get_user_data_root() / "models")
     bundled_bin_dir: Path = field(default_factory=lambda: get_resource_root() / "bin")
     bundled_models_dir: Path = field(default_factory=lambda: get_resource_root() / "models")
     supported_audio_extensions: tuple[str, ...] = (".mp3", ".wav", ".m4a")
@@ -43,6 +44,13 @@ class Settings:
     ffmpeg_binary_name: str = "ffmpeg.exe" if os_name == "nt" else "ffmpeg"
     ffprobe_binary_name: str = "ffprobe.exe" if os_name == "nt" else "ffprobe"
     ytdlp_binary_name: str = "yt-dlp.exe" if os_name == "nt" else "yt-dlp"
+    diarization_embedding_model_repo_id: str = "speechbrain/spkrec-ecapa-voxceleb"
+    diarization_model_dir_name: str = "speechbrain-spkrec-ecapa-voxceleb"
+    diarization_sample_rate: int = 16000
+    diarization_min_segment_seconds: float = 0.8
+    diarization_max_segment_seconds: float = 12.0
+    diarization_merge_gap_seconds: float = 0.35
+    diarization_clustering_distance_threshold: float = 0.55
     required_directories: tuple[Path, ...] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -54,6 +62,7 @@ class Settings:
                 self.jobs_dir,
                 self.outputs_dir,
                 self.temp_dir,
+                self.downloaded_models_dir,
             ),
         )
 
@@ -66,6 +75,12 @@ class Settings:
 
     def bundled_model_path(self, model_size: str) -> Path:
         return self.bundled_models_dir / self.normalize_model_size(model_size)
+
+    def bundled_diarization_model_path(self) -> Path:
+        return self.bundled_models_dir / self.diarization_model_dir_name
+
+    def downloaded_diarization_model_path(self) -> Path:
+        return self.downloaded_models_dir / self.diarization_model_dir_name
 
     def normalize_model_size(self, model_size: str | None) -> str:
         requested = (model_size or self.default_model_size).strip().lower()

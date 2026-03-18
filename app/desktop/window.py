@@ -6,6 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -129,6 +130,17 @@ class MainWindow(QMainWindow):
         self.language_combo.addItem("自動検出", None)
         self.language_combo.setCurrentIndex(0)
         settings_grid.addWidget(self.language_combo, 0, 3)
+
+        self.diarization_checkbox = QCheckBox("話者分離を有効化")
+        settings_grid.addWidget(self.diarization_checkbox, 1, 0, 1, 2)
+
+        settings_grid.addWidget(QLabel("話者数"), 1, 2)
+        self.speaker_count_combo = QComboBox()
+        self.speaker_count_combo.addItem("自動", None)
+        for speaker_count in range(2, 6):
+            self.speaker_count_combo.addItem(f"{speaker_count}人", speaker_count)
+        self.speaker_count_combo.setEnabled(False)
+        settings_grid.addWidget(self.speaker_count_combo, 1, 3)
         layout.addLayout(settings_grid)
 
         action_row = QHBoxLayout()
@@ -176,6 +188,11 @@ class MainWindow(QMainWindow):
         self.error_label.setStyleSheet("color: #b42318; font-weight: 700;")
         layout.addWidget(self.error_label, 5, 0, 1, 2)
 
+        self.warning_label = QLabel("")
+        self.warning_label.setWordWrap(True)
+        self.warning_label.setStyleSheet("color: #b54708; font-weight: 700;")
+        layout.addWidget(self.warning_label, 6, 0, 1, 2)
+
         return group
 
     def _build_result_group(self) -> QGroupBox:
@@ -191,6 +208,7 @@ class MainWindow(QMainWindow):
         self.video_mode.toggled.connect(lambda checked: checked and self._set_mode("video"))
         self.youtube_mode.toggled.connect(lambda checked: checked and self._set_mode("youtube"))
         self.file_browse_button.clicked.connect(self.choose_file)
+        self.diarization_checkbox.toggled.connect(self.speaker_count_combo.setEnabled)
         self.start_button.clicked.connect(self.start_transcription)
         self.stop_button.clicked.connect(self.stop_transcription)
         self.export_result_button.clicked.connect(self.export_result_file)
@@ -214,6 +232,7 @@ class MainWindow(QMainWindow):
         if file_path:
             self.file_path_edit.setText(file_path)
             self.error_label.setText("")
+            self.warning_label.setText("")
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if self._extract_supported_drop_path(event):
@@ -241,6 +260,7 @@ class MainWindow(QMainWindow):
 
         self.file_path_edit.setText(str(resolved))
         self.error_label.setText("")
+        self.warning_label.setText("")
         event.acceptProposedAction()
 
     def start_transcription(self) -> None:
@@ -260,6 +280,10 @@ class MainWindow(QMainWindow):
             source_name=Path(source).name if input_type != InputType.YOUTUBE_URL else str(source),
             model_size=self.job_service.settings.default_model_size,
             language=self.language_combo.currentData(),
+            diarization_enabled=self.diarization_checkbox.isChecked(),
+            diarization_num_speakers=(
+                self.speaker_count_combo.currentData() if self.diarization_checkbox.isChecked() else None
+            ),
         )
         self.current_job_id = job.job_id
         self.source_value.setText(job.source_name)
@@ -309,6 +333,8 @@ class MainWindow(QMainWindow):
             self.chunk_value.setText("-")
         if job.error_message:
             self.show_error(job.error_message)
+        elif job.warning_message:
+            self.show_warning(job.warning_message)
         if job.result_path:
             self.current_result_path = job.result_path
             self.export_result_button.setEnabled(True)
@@ -387,6 +413,7 @@ class MainWindow(QMainWindow):
 
     def _reset_status(self) -> None:
         self.error_label.setText("")
+        self.warning_label.setText("")
         self.result_text.clear()
         self.progress_bar.setValue(0)
         self.chunk_value.setText("-")
@@ -395,7 +422,12 @@ class MainWindow(QMainWindow):
         self.export_result_button.setEnabled(False)
 
     def show_error(self, message: str) -> None:
+        self.warning_label.setText("")
         self.error_label.setText(message)
+
+    def show_warning(self, message: str) -> None:
+        self.error_label.setText("")
+        self.warning_label.setText(message)
 
     def _status_text(self, status: JobStatus) -> str:
         return self.STATUS_LABELS.get(status, status.value)

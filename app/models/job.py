@@ -33,6 +33,8 @@ class Job(BaseModel):
     total_chunks: int | None = Field(default=None, ge=1)
     model_size: str
     language: str
+    diarization_enabled: bool = False
+    diarization_num_speakers: int | None = Field(default=None, ge=2, le=10)
     created_at: datetime = Field(default_factory=utc_now)
     started_at: datetime | None = None
     transcription_started_at: datetime | None = None
@@ -44,4 +46,5 @@ class Job(BaseModel):
     cancellation_requested: bool = False
     error_message: str | None = None
     error_detail: str | None = None
+    warning_message: str | None = None
     result_path: str | None = None

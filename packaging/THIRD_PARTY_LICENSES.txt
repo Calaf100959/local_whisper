@@ -78,7 +78,59 @@ Key bundled components
    License file:
    - licenses\MIT-pydantic.txt
 
-8. onnxruntime 1.24.3
+8. silero-vad 6.2.1
+   Copyright: Silero Team and contributors
+   License: MIT
+   Upstream:
+   - https://github.com/snakers4/silero-vad
+   License file:
+   - licenses\MIT-silero-vad.txt
+
+9. SpeechBrain 1.0.3
+   Copyright: SpeechBrain and contributors
+   License: Apache-2.0
+   Upstream:
+   - https://github.com/speechbrain/speechbrain
+   License file:
+   - licenses\Apache-2.0-speechbrain.txt
+
+10. speechbrain/spkrec-ecapa-voxceleb model
+    Copyright: SpeechBrain and contributors
+    License: Apache-2.0
+    Upstream:
+    - https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb
+    License file:
+    - licenses\Apache-2.0-speechbrain-model.txt
+    Notes:
+    - This package bundles the public ECAPA-TDNN speaker embedding model files
+      under resources\models\speechbrain-spkrec-ecapa-voxceleb.
+
+11. scikit-learn 1.7.2
+   Copyright: scikit-learn developers
+   License: BSD-3-Clause
+   Upstream:
+   - https://github.com/scikit-learn/scikit-learn
+   License file:
+   - licenses\BSD-3-Clause-scikit-learn.txt
+
+12. torch 2.10.0
+   Copyright: PyTorch contributors
+   License: BSD-style
+   Upstream:
+   - https://github.com/pytorch/pytorch
+   License files:
+   - licenses\BSD-torch.txt
+   - licenses\NOTICE-torch.txt
+
+13. torchaudio 2.10.0
+   Copyright: PyTorch contributors
+   License: BSD-2-Clause
+   Upstream:
+   - https://github.com/pytorch/audio
+   License file:
+   - licenses\BSD-2-Clause-torchaudio.txt
+
+14. onnxruntime 1.24.3
    Copyright: Microsoft Corporation and contributors
    License: MIT
    Upstream:
@@ -87,7 +139,7 @@ Key bundled components
    - licenses\MIT-onnxruntime.txt
    - licenses\onnxruntime-ThirdPartyNotices.txt
 
-9. PyAV 16.1.0
+15. PyAV 16.1.0
    Copyright: PyAV developers and contributors
    License: BSD-3-Clause
    Upstream:
@@ -95,7 +147,7 @@ Key bundled components
    License file:
    - licenses\BSD-3-Clause-pyav.txt
 
-10. OpenAI Whisper
+16. OpenAI Whisper
     Copyright: OpenAI and contributors
     License: MIT
     Upstream:
@@ -103,7 +155,7 @@ Key bundled components
     License file:
     - licenses\MIT-openai-whisper.txt
 
-11. Systran/faster-whisper-small model
+17. Systran/faster-whisper-small model
     Copyright: Original model and conversion authors
     License: MIT (model card metadata)
     Upstream:
@@ -113,7 +165,7 @@ Key bundled components
     - This package bundles the converted small model files under
       resources\models\small.
 
-12. FFmpeg / FFprobe bundled executables
+18. FFmpeg / FFprobe bundled executables
     Download source used by this project:
     - https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
     Upstream project:
@@ -128,7 +180,7 @@ Key bundled components
     - If you redistribute these binaries, verify that you satisfy the source
       code and notice obligations applicable to the exact binaries you ship.
 
-13. yt-dlp bundled executable
+19. yt-dlp bundled executable
     Download source used by this project:
     - https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
     Upstream project:

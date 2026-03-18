@@ -9,10 +9,27 @@ from PyInstaller.utils.hooks import collect_all
 project_root = Path.cwd()
 
 datas = [
-    (str(project_root / "resources"), "resources"),
+    (str(project_root / "resources" / "bin"), "resources/bin"),
+    (str(project_root / "resources" / "models" / "README.md"), "resources/models"),
+    (str(project_root / "resources" / "models" / "small"), "resources/models/small"),
+    (
+        str(project_root / "resources" / "models" / "speechbrain-spkrec-ecapa-voxceleb"),
+        "resources/models/speechbrain-spkrec-ecapa-voxceleb",
+    ),
 ]
 binaries = []
-hiddenimports = []
+hiddenimports = [
+    "logging.config",
+    "logging.handlers",
+]
+
+try:
+    import torchaudio
+
+    if not hasattr(torchaudio, "list_audio_backends"):
+        torchaudio.list_audio_backends = lambda: ["ffmpeg"]
+except Exception:
+    pass
 
 conda_library_bin = Path(sys.base_prefix) / "Library" / "bin"
 for dll_name in (
@@ -35,6 +52,14 @@ for package_name in (
     "av",
     "tokenizers",
     "huggingface_hub",
+    "hyperpyyaml",
+    "ruamel.yaml",
+    "sentencepiece",
+    "silero_vad",
+    "sklearn",
+    "speechbrain",
+    "torch",
+    "torchaudio",
 ):
     try:
         package_datas, package_binaries, package_hiddenimports = collect_all(package_name)

@@ -17,6 +17,7 @@ $ffmpegZipPath = Join-Path $tempDir "ffmpeg-release-essentials.zip"
 $ffmpegExtractDir = Join-Path $tempDir "ffmpeg"
 $ytDlpPath = Join-Path $resourcesBinDir "yt-dlp.exe"
 $modelTargetDir = Join-Path $resourcesModelsDir "small"
+$diarizationModelTargetDir = Join-Path $resourcesModelsDir "speechbrain-spkrec-ecapa-voxceleb"
 New-Item -ItemType Directory -Force -Path $modelTargetDir | Out-Null
 
 Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZipPath
@@ -43,7 +44,17 @@ if (-not (Test-Path (Join-Path $modelTargetDir "model.bin"))) {
     & $pythonExe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Systran/faster-whisper-small', local_dir=r'$modelTargetDir')"
 }
 
+if (-not (Test-Path (Join-Path $diarizationModelTargetDir "hyperparams.yaml"))) {
+    New-Item -ItemType Directory -Force -Path $diarizationModelTargetDir | Out-Null
+    & $pythonExe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb', local_dir=r'$diarizationModelTargetDir')"
+}
+
 Write-Host ""
 Write-Host "Bundled assets are ready."
 Write-Host "FFmpeg binaries: $resourcesBinDir"
 Write-Host "Whisper model:  $modelTargetDir"
+if (Test-Path (Join-Path $diarizationModelTargetDir "hyperparams.yaml")) {
+    Write-Host "Diarization model: $diarizationModelTargetDir"
+} else {
+    Write-Host "Diarization model: not bundled"
+}

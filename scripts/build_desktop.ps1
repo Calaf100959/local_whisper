@@ -40,7 +40,8 @@ $requiredAssets = @(
     (Join-Path $repoRoot "resources\bin\ffmpeg.exe"),
     (Join-Path $repoRoot "resources\bin\ffprobe.exe"),
     (Join-Path $repoRoot "resources\bin\yt-dlp.exe"),
-    (Join-Path $repoRoot "resources\models\small\model.bin")
+    (Join-Path $repoRoot "resources\models\small\model.bin"),
+    (Join-Path $repoRoot "resources\models\speechbrain-spkrec-ecapa-voxceleb\hyperparams.yaml")
 )
 
 foreach ($assetPath in $requiredAssets) {

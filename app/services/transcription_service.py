@@ -31,6 +31,7 @@ class TranscribedSegment:
     start_seconds: float
     end_seconds: float
     text: str
+    speaker: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -38,6 +39,18 @@ class TranscriptionResult:
     text: str
     segments: list[TranscribedSegment]
     language: str | None = None
+
+    def render_text(self, *, include_speakers: bool = False) -> str:
+        lines: list[str] = []
+        for segment in self.segments:
+            text = segment.text.strip()
+            if not text:
+                continue
+            if include_speakers and segment.speaker:
+                lines.append(f"[{segment.speaker}] {text}")
+            else:
+                lines.append(text)
+        return "\n".join(lines)
 
 
 @dataclass(slots=True, frozen=True)
@@ -186,7 +199,7 @@ class TranscriptionService:
         language: str | None = None,
     ) -> TranscriptionResult:
         ordered_segments = sorted(segments, key=lambda item: (item.start_seconds, item.end_seconds))
-        text = "\n".join(segment.text.strip() for segment in ordered_segments if segment.text.strip())
+        text = TranscriptionResult(text="", segments=ordered_segments, language=language).render_text()
         return TranscriptionResult(text=text, segments=ordered_segments, language=language)
 
     def _run_transcription(

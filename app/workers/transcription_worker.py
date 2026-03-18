@@ -7,10 +7,12 @@ from app.core.logging import get_logger
 from app.core.settings import Settings, get_settings
 from app.models.job import JobStatus
 from app.services.chunk_service import ChunkService
+from app.services.diarization_service import DiarizationService
 from app.services.ffmpeg_service import FFmpegService
 from app.services.job_service import JobService
 from app.services.media_service import InputType
 from app.services.result_service import OutputFormat, ResultService
+from app.services.speaker_assignment_service import SpeakerAssignmentService
 from app.services.transcription_service import (
     ChunkTranscriptionInput,
     TranscriptionCancelled,
@@ -32,6 +34,8 @@ class TranscriptionWorker:
         chunk_service: ChunkService | None = None,
         result_service: ResultService | None = None,
         transcription_service: TranscriptionService | None = None,
+        diarization_service: DiarizationService | None = None,
+        speaker_assignment_service: SpeakerAssignmentService | None = None,
         youtube_service: YouTubeService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
@@ -43,6 +47,8 @@ class TranscriptionWorker:
             self.settings,
             self.job_service,
         )
+        self.diarization_service = diarization_service or DiarizationService(self.settings)
+        self.speaker_assignment_service = speaker_assignment_service or SpeakerAssignmentService()
         self.youtube_service = youtube_service or YouTubeService(self.settings)
 
     def run(self, job_id: str, source: str | Path) -> TranscriptionResult:
@@ -52,6 +58,7 @@ class TranscriptionWorker:
         try:
             logger.info("Transcription job started: job_id=%s input_type=%s source=%s", job_id, job.input_type, source)
             self.job_service.update_status(job_id, JobStatus.PREPARING)
+            self.job_service.set_warning(job_id, None)
 
             prepared_audio_path = self._prepare_source(job_id, job.input_type, source, cleanup_paths)
             self._raise_if_cancel_requested(job_id)
@@ -85,6 +92,7 @@ class TranscriptionWorker:
                 )
 
             self.job_service.update_status(job_id, JobStatus.MERGING)
+            result = self._apply_speaker_diarization(job, prepared_audio_path, result)
             result_path = self._save_result(job.job_id, job.source_name, result)
             self.job_service.set_result_path(job_id, result_path)
             self.job_service.update_status(job_id, JobStatus.COMPLETED)
@@ -167,6 +175,29 @@ class TranscriptionWorker:
             result=result,
         )
         return saved_paths[OutputFormat.TXT]
+
+    def _apply_speaker_diarization(
+        self,
+        job,
+        prepared_audio_path: Path,
+        result: TranscriptionResult,
+    ) -> TranscriptionResult:
+        if not job.diarization_enabled or not result.segments:
+            return result
+
+        try:
+            diarized_segments = self.diarization_service.diarize(
+                prepared_audio_path,
+                num_speakers=job.diarization_num_speakers,
+            )
+            return self.speaker_assignment_service.assign_speakers(result, diarized_segments)
+        except Exception as exc:
+            logger.exception("Speaker diarization failed: job_id=%s", job.job_id)
+            self.job_service.set_warning(
+                job.job_id,
+                f"文字起こしは完了しましたが、話者分離に失敗しました。{to_user_message(exc)}",
+            )
+            return result
 
     def _cleanup_paths(self, cleanup_paths: set[Path]) -> None:
         for path in sorted(cleanup_paths):

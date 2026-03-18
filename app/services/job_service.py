@@ -25,6 +25,8 @@ class JobService:
         source_name: str,
         model_size: str | None = None,
         language: str | None = None,
+        diarization_enabled: bool = False,
+        diarization_num_speakers: int | None = None,
     ) -> Job:
         job = Job(
             job_id=self.generate_job_id(),
@@ -32,6 +34,8 @@ class JobService:
             source_name=source_name,
             model_size=self.settings.normalize_model_size(model_size),
             language=language or self.settings.default_language,
+            diarization_enabled=diarization_enabled,
+            diarization_num_speakers=diarization_num_speakers,
         )
         self._save_job(job)
         return job
@@ -133,6 +137,17 @@ class JobService:
                 "finished_at": now,
                 "estimated_completion_at": None,
                 "updated_at": now,
+            }
+        )
+        self._save_job(updated_job)
+        return updated_job
+
+    def set_warning(self, job_id: str, warning_message: str | None) -> Job:
+        job = self.get_job(job_id)
+        updated_job = job.model_copy(
+            update={
+                "warning_message": warning_message,
+                "updated_at": self._utc_now(),
             }
         )
         self._save_job(updated_job)

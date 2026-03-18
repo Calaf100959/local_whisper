@@ -23,6 +23,6 @@ class DesktopWorkerThread(QThread):
         try:
             result = self.worker.run(self.job_id, self.source)
             job = JobService().get_job(self.job_id)
-            self.finished_with_result.emit(result.text, job.result_path or "")
+            self.finished_with_result.emit(result.render_text(include_speakers=True), job.result_path or "")
         except Exception as exc:
             self.failed_with_error.emit(to_user_message(exc))
