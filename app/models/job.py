@@ -35,8 +35,11 @@ class Job(BaseModel):
     language: str
     created_at: datetime = Field(default_factory=utc_now)
     started_at: datetime | None = None
+    transcription_started_at: datetime | None = None
     updated_at: datetime = Field(default_factory=utc_now)
     finished_at: datetime | None = None
+    processed_seconds: float = Field(default=0.0, ge=0.0)
+    total_seconds: float | None = Field(default=None, gt=0.0)
     estimated_completion_at: datetime | None = None
     cancellation_requested: bool = False
     error_message: str | None = None

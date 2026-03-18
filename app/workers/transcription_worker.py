@@ -73,8 +73,16 @@ class TranscriptionWorker:
                     model_size=job.model_size,
                     language=job.language,
                     job_id=job_id,
+                    total_duration_seconds=duration_seconds,
                 )
-                self.job_service.update_progress(job_id, progress_percent=100, current_chunk=1, total_chunks=1)
+                self.job_service.update_progress(
+                    job_id,
+                    progress_percent=100,
+                    current_chunk=1,
+                    total_chunks=1,
+                    processed_seconds=duration_seconds,
+                    total_seconds=duration_seconds,
+                )
 
             self.job_service.update_status(job_id, JobStatus.MERGING)
             result_path = self._save_result(job.job_id, job.source_name, result)
@@ -149,6 +157,7 @@ class TranscriptionWorker:
             model_size=model_size,
             language=language,
             job_id=job_id,
+            total_duration_seconds=duration_seconds,
         )
 
     def _save_result(self, job_id: str, source_name: str, result: TranscriptionResult) -> Path:

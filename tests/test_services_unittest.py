@@ -4,6 +4,7 @@ import asyncio
 import unittest
 from pathlib import Path
 import shutil
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -63,14 +64,24 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(job.status, JobStatus.QUEUED)
 
         updated = service.update_status(job.job_id, JobStatus.TRANSCRIBING)
-        progressed = service.update_progress(job.job_id, progress_percent=50, current_chunk=1, total_chunks=2)
+        progressed = service.update_progress(
+            job.job_id,
+            progress_percent=50,
+            current_chunk=1,
+            total_chunks=2,
+            processed_seconds=30.0,
+            total_seconds=60.0,
+        )
         result_set = service.set_result_path(job.job_id, "data/outputs/sample.txt")
         errored = service.set_error(job.job_id, "error text")
 
         self.assertEqual(updated.status, JobStatus.TRANSCRIBING)
+        self.assertIsNotNone(updated.transcription_started_at)
         self.assertEqual(progressed.progress_percent, 50)
         self.assertEqual(progressed.current_chunk, 1)
         self.assertEqual(progressed.total_chunks, 2)
+        self.assertEqual(progressed.processed_seconds, 30.0)
+        self.assertEqual(progressed.total_seconds, 60.0)
         self.assertEqual(result_set.result_path, "data/outputs/sample.txt")
         self.assertEqual(errored.status, JobStatus.FAILED)
 
@@ -164,6 +175,42 @@ class ServiceTests(unittest.TestCase):
         with patch("app.services.transcription_service.is_frozen_app", return_value=True):
             with self.assertRaises(TranscriptionError):
                 service._resolve_model_source("small")
+
+    def test_transcription_service_updates_progress_for_single_file(self) -> None:
+        source_path = self.root / "sample.wav"
+        source_path.write_bytes(b"audio")
+        job_service = JobService(self.settings)
+        service = TranscriptionService(self.settings, job_service=job_service)
+        job = job_service.create_job(input_type="audio", source_name=source_path.name)
+
+        fake_segments = [
+            SimpleNamespace(start=0.0, end=4.0, text="前半"),
+            SimpleNamespace(start=4.0, end=8.0, text="後半"),
+        ]
+        fake_info = SimpleNamespace(language="ja", duration=12.0)
+
+        class FakeModel:
+            def transcribe(self, audio: str, language: str | None = None):
+                return iter(fake_segments), fake_info
+
+        with patch.object(service, "load_model", return_value=FakeModel()):
+            result = service.transcribe_file(
+                source_path,
+                model_size="small",
+                language="ja",
+                job_id=job.job_id,
+                total_duration_seconds=12.0,
+            )
+
+        updated_job = job_service.get_job(job.job_id)
+        self.assertEqual(result.text, "前半\n後半")
+        self.assertEqual(updated_job.status, JobStatus.TRANSCRIBING)
+        self.assertEqual(updated_job.progress_percent, 66)
+        self.assertEqual(updated_job.current_chunk, 1)
+        self.assertEqual(updated_job.total_chunks, 1)
+        self.assertEqual(updated_job.processed_seconds, 8.0)
+        self.assertEqual(updated_job.total_seconds, 12.0)
+        self.assertIsNotNone(updated_job.transcription_started_at)
 
 
 if __name__ == "__main__":

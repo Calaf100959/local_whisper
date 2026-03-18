@@ -163,7 +163,7 @@ class MainWindow(QMainWindow):
         self.chunk_value = QLabel("-")
         layout.addWidget(self.chunk_value, 2, 1)
 
-        layout.addWidget(QLabel("完了予定時刻"), 3, 0)
+        layout.addWidget(QLabel("推定残り時間"), 3, 0)
         self.eta_value = QLabel("-")
         layout.addWidget(self.eta_value, 3, 1)
 
@@ -401,18 +401,27 @@ class MainWindow(QMainWindow):
         return self.STATUS_LABELS.get(status, status.value)
 
     def _format_eta(self, job: Job) -> str:
-        if job.estimated_completion_at:
-            estimated = self._parse_datetime(job.estimated_completion_at)
-            return estimated.astimezone().strftime("%Y-%m-%d %H:%M:%S")
-        if job.status in {
-            JobStatus.PREPARING,
-            JobStatus.EXTRACTING,
-            JobStatus.SPLITTING,
-            JobStatus.TRANSCRIBING,
-            JobStatus.MERGING,
-        }:
-            return "算出中"
+        if job.status == JobStatus.TRANSCRIBING:
+            if job.estimated_completion_at:
+                estimated = self._parse_datetime(job.estimated_completion_at).astimezone()
+                now = datetime.now().astimezone()
+                remaining_seconds = max(0, int((estimated - now).total_seconds()))
+                estimated_text = estimated.strftime("%H:%M:%S")
+                if estimated.date() != now.date():
+                    estimated_text = estimated.strftime("%Y-%m-%d %H:%M:%S")
+                return f"約 {self._format_duration(remaining_seconds)} ({estimated_text} 頃)"
+            return "推定中"
         return "-"
+
+    @staticmethod
+    def _format_duration(total_seconds: int) -> str:
+        hours, remainder = divmod(max(0, total_seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours:
+            return f"{hours}時間{minutes:02d}分{seconds:02d}秒"
+        if minutes:
+            return f"{minutes}分{seconds:02d}秒"
+        return f"{seconds}秒"
 
     def _confirm_start(self) -> bool:
         response = QMessageBox.question(

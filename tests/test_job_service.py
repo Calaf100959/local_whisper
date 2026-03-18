@@ -30,14 +30,24 @@ def test_job_service_creates_and_updates_job(tmp_path: Path) -> None:
     assert job.language == "ja"
 
     updated = service.update_status(job.job_id, JobStatus.TRANSCRIBING)
-    progressed = service.update_progress(job.job_id, progress_percent=50, current_chunk=1, total_chunks=2)
+    progressed = service.update_progress(
+        job.job_id,
+        progress_percent=50,
+        current_chunk=1,
+        total_chunks=2,
+        processed_seconds=30.0,
+        total_seconds=60.0,
+    )
     result_set = service.set_result_path(job.job_id, "data/outputs/sample.txt")
     errored = service.set_error(job.job_id, "error text")
 
     assert updated.status == JobStatus.TRANSCRIBING
+    assert updated.transcription_started_at is not None
     assert progressed.progress_percent == 50
     assert progressed.current_chunk == 1
     assert progressed.total_chunks == 2
+    assert progressed.processed_seconds == 30.0
+    assert progressed.total_seconds == 60.0
     assert result_set.result_path == "data/outputs/sample.txt"
     assert errored.status == JobStatus.FAILED
     assert errored.error_message == "error text"

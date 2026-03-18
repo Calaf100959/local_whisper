@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from app.core.logging import get_logger
 from app.core.runtime import is_frozen_app
@@ -89,6 +89,7 @@ class TranscriptionService:
         model_size: str | None = None,
         language: str | None = None,
         job_id: str | None = None,
+        total_duration_seconds: float | None = None,
     ) -> TranscriptionResult:
         path = Path(source_path)
         if not path.exists():
@@ -99,8 +100,20 @@ class TranscriptionService:
             self._raise_if_cancel_requested(job_id)
 
         model = self.load_model(model_size)
-        segments, info = self._run_transcription(model, path, language=language)
-        result = self._build_result(segments, language=getattr(info, "language", None))
+        raw_segments, info = self._collect_segments(
+            model,
+            path,
+            language=language,
+            job_id=job_id,
+            total_duration_seconds=total_duration_seconds,
+            current_chunk=1,
+            total_chunks=1,
+            offset_seconds=0.0,
+            overlap_before_seconds=0.0,
+            max_processed_seconds=total_duration_seconds,
+            check_cancel_during_collection=True,
+        )
+        result = self._build_result(raw_segments, language=getattr(info, "language", None))
 
         if job_id:
             self._raise_if_cancel_requested(job_id, partial_result=result)
@@ -114,6 +127,7 @@ class TranscriptionService:
         model_size: str | None = None,
         language: str | None = None,
         job_id: str | None = None,
+        total_duration_seconds: float | None = None,
     ) -> TranscriptionResult:
         if not chunks:
             raise ValueError("At least one chunk is required for transcription.")
@@ -136,19 +150,28 @@ class TranscriptionService:
             if not chunk_input.path.exists():
                 raise FileNotFoundError(f"Chunk audio file not found: {chunk_input.path}")
 
-            raw_segments, info = self._run_transcription(model, chunk_input.path, language=language)
+            raw_segments, info = self._collect_segments(
+                model,
+                chunk_input.path,
+                language=language,
+                job_id=job_id,
+                total_duration_seconds=total_duration_seconds,
+                current_chunk=index,
+                total_chunks=total_chunks,
+                offset_seconds=chunk_input.chunk.offset_seconds,
+                overlap_before_seconds=chunk_input.chunk.overlap_before_seconds,
+                max_processed_seconds=chunk_input.chunk.offset_seconds
+                + (
+                    chunk_input.chunk.duration_seconds
+                    - chunk_input.chunk.overlap_before_seconds
+                    - chunk_input.chunk.overlap_after_seconds
+                ),
+                check_cancel_during_collection=False,
+            )
             detected_language = detected_language or getattr(info, "language", None)
             adjusted_segments = self._adjust_segments(raw_segments, chunk_input.chunk.offset_seconds)
             merged_segments.extend(adjusted_segments)
-
             if job_id:
-                progress_percent = int(index / total_chunks * 100)
-                self.job_service.update_progress(
-                    job_id,
-                    progress_percent=progress_percent,
-                    current_chunk=index,
-                    total_chunks=total_chunks,
-                )
                 self._raise_if_cancel_requested(
                     job_id,
                     partial_result=self.merge_transcriptions(merged_segments, language=detected_language),
@@ -172,7 +195,7 @@ class TranscriptionService:
         source_path: Path,
         *,
         language: str | None = None,
-    ) -> tuple[list[Any], Any]:
+    ) -> tuple[Iterable[Any], Any]:
         try:
             segments, info = model.transcribe(
                 str(source_path),
@@ -182,7 +205,83 @@ class TranscriptionService:
             logger.exception("Transcription failed: source=%s language=%s", source_path, language)
             raise TranscriptionError(f"Transcription failed for '{source_path.name}'.") from exc
 
-        return list(segments), info
+        return segments, info
+
+    def _collect_segments(
+        self,
+        model: Any,
+        source_path: Path,
+        *,
+        language: str | None = None,
+        job_id: str | None = None,
+        total_duration_seconds: float | None = None,
+        current_chunk: int | None = None,
+        total_chunks: int | None = None,
+        offset_seconds: float = 0.0,
+        overlap_before_seconds: float = 0.0,
+        max_processed_seconds: float | None = None,
+        check_cancel_during_collection: bool = True,
+    ) -> tuple[list[Any], Any]:
+        raw_segments_iterable, info = self._run_transcription(model, source_path, language=language)
+        effective_total_seconds = self._resolve_total_duration_seconds(total_duration_seconds, info)
+        raw_segments: list[Any] = []
+
+        if job_id and effective_total_seconds:
+            self.job_service.update_progress(
+                job_id,
+                progress_percent=0,
+                current_chunk=current_chunk,
+                total_chunks=total_chunks,
+                processed_seconds=min(offset_seconds, effective_total_seconds),
+                total_seconds=effective_total_seconds,
+            )
+
+        for segment in raw_segments_iterable:
+            raw_segments.append(segment)
+
+            if not job_id or not effective_total_seconds:
+                continue
+
+            processed_seconds = self._calculate_processed_seconds(
+                segment_end_seconds=float(getattr(segment, "end", 0.0)),
+                offset_seconds=offset_seconds,
+                overlap_before_seconds=overlap_before_seconds,
+                effective_total_seconds=effective_total_seconds,
+                max_processed_seconds=max_processed_seconds,
+            )
+            progress_percent = self._calculate_progress_percent(processed_seconds, effective_total_seconds)
+            self.job_service.update_progress(
+                job_id,
+                progress_percent=progress_percent,
+                current_chunk=current_chunk,
+                total_chunks=total_chunks,
+                processed_seconds=processed_seconds,
+                total_seconds=effective_total_seconds,
+            )
+            if check_cancel_during_collection:
+                self._raise_if_cancel_requested(
+                    job_id,
+                    partial_result=self._build_result(raw_segments, language=getattr(info, "language", None)),
+                )
+
+        if job_id and effective_total_seconds and raw_segments:
+            final_processed_seconds = self._calculate_processed_seconds(
+                segment_end_seconds=float(getattr(raw_segments[-1], "end", 0.0)),
+                offset_seconds=offset_seconds,
+                overlap_before_seconds=overlap_before_seconds,
+                effective_total_seconds=effective_total_seconds,
+                max_processed_seconds=max_processed_seconds,
+            )
+            self.job_service.update_progress(
+                job_id,
+                progress_percent=self._calculate_progress_percent(final_processed_seconds, effective_total_seconds),
+                current_chunk=current_chunk,
+                total_chunks=total_chunks,
+                processed_seconds=final_processed_seconds,
+                total_seconds=effective_total_seconds,
+            )
+
+        return raw_segments, info
 
     def _build_result(
         self,
@@ -207,6 +306,39 @@ class TranscriptionService:
             )
 
         return adjusted_segments
+
+    @staticmethod
+    def _resolve_total_duration_seconds(total_duration_seconds: float | None, info: Any) -> float | None:
+        if total_duration_seconds and total_duration_seconds > 0:
+            return float(total_duration_seconds)
+
+        info_duration = getattr(info, "duration", None)
+        if info_duration and float(info_duration) > 0:
+            return float(info_duration)
+
+        return None
+
+    @staticmethod
+    def _calculate_progress_percent(processed_seconds: float, total_seconds: float) -> int:
+        if total_seconds <= 0:
+            return 0
+        ratio = min(max(processed_seconds / total_seconds, 0.0), 1.0)
+        return int(ratio * 100)
+
+    @staticmethod
+    def _calculate_processed_seconds(
+        *,
+        segment_end_seconds: float,
+        offset_seconds: float,
+        overlap_before_seconds: float,
+        effective_total_seconds: float,
+        max_processed_seconds: float | None,
+    ) -> float:
+        non_overlap_seconds = max(0.0, segment_end_seconds - overlap_before_seconds)
+        processed_seconds = max(offset_seconds, offset_seconds + non_overlap_seconds)
+        if max_processed_seconds is not None:
+            processed_seconds = min(processed_seconds, max_processed_seconds)
+        return min(processed_seconds, effective_total_seconds)
 
     def _raise_if_cancel_requested(
         self,

@@ -4,7 +4,7 @@
 #define PreviousAppName "Local Whisper Transcriber"
 #define AppVersion GetEnv("APP_VERSION")
 #if AppVersion == ""
-  #define AppVersion "0.1.3"
+  #define AppVersion "0.1.4"
 #endif
 
 [Setup]

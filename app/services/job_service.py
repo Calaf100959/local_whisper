@@ -46,11 +46,16 @@ class JobService:
         job = self.get_job(job_id)
         now = self._utc_now()
         started_at = job.started_at
+        transcription_started_at = job.transcription_started_at
         finished_at = job.finished_at
         estimated_completion_at = job.estimated_completion_at
 
         if status not in {JobStatus.QUEUED} and started_at is None:
             started_at = now
+        if status == JobStatus.TRANSCRIBING and transcription_started_at is None:
+            transcription_started_at = now
+        if status != JobStatus.TRANSCRIBING:
+            estimated_completion_at = None
         if status in self._terminal_statuses():
             finished_at = now
             estimated_completion_at = None
@@ -59,6 +64,7 @@ class JobService:
             update={
                 "status": status,
                 "started_at": started_at,
+                "transcription_started_at": transcription_started_at,
                 "finished_at": finished_at,
                 "estimated_completion_at": estimated_completion_at,
                 "updated_at": now,
@@ -74,12 +80,17 @@ class JobService:
         progress_percent: int,
         current_chunk: int | None = None,
         total_chunks: int | None = None,
+        processed_seconds: float | None = None,
+        total_seconds: float | None = None,
     ) -> Job:
         job = self.get_job(job_id)
         now = self._utc_now()
         started_at = job.started_at or now
+        transcription_started_at = job.transcription_started_at or now
+        next_processed_seconds = max(0.0, processed_seconds if processed_seconds is not None else job.processed_seconds)
+        next_total_seconds = total_seconds if total_seconds is not None else job.total_seconds
         estimated_completion_at = self._estimate_completion_at(
-            started_at=started_at,
+            started_at=transcription_started_at,
             updated_at=now,
             progress_percent=progress_percent,
         )
@@ -89,6 +100,9 @@ class JobService:
                 "current_chunk": current_chunk,
                 "total_chunks": total_chunks,
                 "started_at": started_at,
+                "transcription_started_at": transcription_started_at,
+                "processed_seconds": next_processed_seconds,
+                "total_seconds": next_total_seconds,
                 "estimated_completion_at": estimated_completion_at,
                 "updated_at": now,
             }
