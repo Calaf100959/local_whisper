@@ -68,6 +68,12 @@ powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1
 - `dist/LocalWhisperTranscriber`
 - `dist/installer/LocalWhisperSetup-<version>-x64.exe`
 
+配布物には以下も同梱されます。
+- `README.txt`
+- `EULA.txt`
+- `THIRD_PARTY_LICENSES.txt`
+- `licenses/`
+
 ## 使い方
 1. アプリを起動する
 2. 入力方式を選ぶ
@@ -95,3 +101,5 @@ py -m unittest discover -s tests -p "*_unittest.py" -v
 - 長尺ファイルは処理に時間がかかります
 - YouTube 入力はネット接続が必要です
 - 話者分離、GPU 対応は未実装です
+- 配布版には第三者ソフトウェアとモデルが含まれます。詳細は `THIRD_PARTY_LICENSES.txt` と `licenses/` を参照してください
+- installer では `EULA.txt` に基づく利用規約同意ページを表示します

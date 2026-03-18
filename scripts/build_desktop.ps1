@@ -8,6 +8,9 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $specPath = Join-Path $repoRoot "packaging\local-whisper.spec"
 $distributionReadmePath = Join-Path $repoRoot "packaging\README.txt"
+$eulaPath = Join-Path $repoRoot "packaging\EULA.txt"
+$thirdPartyNoticesPath = Join-Path $repoRoot "packaging\THIRD_PARTY_LICENSES.txt"
+$licenseDirectoryPath = Join-Path $repoRoot "packaging\licenses"
 
 if (-not (Test-Path $pythonExe)) {
     throw "Python virtual environment was not found: $pythonExe"
@@ -19,6 +22,18 @@ if (-not (Test-Path $specPath)) {
 
 if (-not (Test-Path $distributionReadmePath)) {
     throw "Distribution README was not found: $distributionReadmePath"
+}
+
+if (-not (Test-Path $eulaPath)) {
+    throw "Installer EULA was not found: $eulaPath"
+}
+
+if (-not (Test-Path $thirdPartyNoticesPath)) {
+    throw "Third-party notices file was not found: $thirdPartyNoticesPath"
+}
+
+if (-not (Test-Path $licenseDirectoryPath)) {
+    throw "License directory was not found: $licenseDirectoryPath"
 }
 
 $requiredAssets = @(
@@ -43,7 +58,14 @@ if (-not $SkipTests) {
 & $pythonExe -m PyInstaller $specPath --noconfirm --clean
 
 $distRoot = Join-Path $repoRoot "dist\LocalWhisperTranscriber"
+$distLicenseDirectoryPath = Join-Path $distRoot "licenses"
 Copy-Item -Path $distributionReadmePath -Destination (Join-Path $distRoot "README.txt") -Force
+Copy-Item -Path $eulaPath -Destination (Join-Path $distRoot "EULA.txt") -Force
+Copy-Item -Path $thirdPartyNoticesPath -Destination (Join-Path $distRoot "THIRD_PARTY_LICENSES.txt") -Force
+if (Test-Path $distLicenseDirectoryPath) {
+    Remove-Item -Path $distLicenseDirectoryPath -Recurse -Force
+}
+Copy-Item -Path $licenseDirectoryPath -Destination $distLicenseDirectoryPath -Recurse -Force
 
 Write-Host ""
 Write-Host "Desktop build completed."

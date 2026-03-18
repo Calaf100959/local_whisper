@@ -12,6 +12,7 @@ AppId={{1F213281-64A6-4A66-A848-8D35AA730B2A}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
+LicenseFile=EULA.txt
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 AllowNoIcons=yes

@@ -1,0 +1,155 @@
+Local Whisper Transcriber
+Third-Party Software Notices
+
+Last updated: 2026-03-18
+
+This package includes or depends on third-party software, libraries, and model
+files. The applicable license terms remain with each original copyright holder.
+This notice is provided for attribution and redistribution guidance. It is not
+legal advice.
+
+Files included with this distribution:
+- README.txt
+- THIRD_PARTY_LICENSES.txt
+- licenses\
+
+Key bundled components
+----------------------
+
+1. PySide6 6.10.2
+   Copyright: The Qt Company Ltd. and contributors
+   License: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+   Upstream:
+   - https://pyside.org
+   - https://doc.qt.io/qtforpython-6/
+   - https://code.qt.io/cgit/pyside/pyside-setup.git/
+   Notes:
+   - This application uses the open-source PySide6 / Qt for Python package.
+   - See licenses\LGPL-3.0.txt and licenses\GPL-3.0.txt.
+   - If you add an end-user license agreement, do not remove rights granted
+     by the LGPL/GPL to covered components.
+
+2. shiboken6 6.10.2
+   Copyright: The Qt Company Ltd. and contributors
+   License: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+   Upstream:
+   - https://doc.qt.io/qtforpython-6/shiboken6/
+   - https://code.qt.io/cgit/pyside/pyside-setup.git/
+   Notes:
+   - See licenses\LGPL-3.0.txt and licenses\GPL-3.0.txt.
+
+3. faster-whisper 1.2.1
+   Copyright: SYSTRAN
+   License: MIT
+   Upstream:
+   - https://github.com/SYSTRAN/faster-whisper
+   License file:
+   - licenses\MIT-faster-whisper.txt
+
+4. CTranslate2 4.7.1
+   Copyright: OpenNMT and contributors
+   License: MIT
+   Upstream:
+   - https://github.com/OpenNMT/CTranslate2
+   License file:
+   - licenses\MIT-ctranslate2.txt
+
+5. huggingface_hub 1.6.0
+   Copyright: Hugging Face, Inc. and contributors
+   License: Apache-2.0
+   Upstream:
+   - https://github.com/huggingface/huggingface_hub
+   License file:
+   - licenses\Apache-2.0-huggingface-hub.txt
+
+6. tokenizers 0.22.2
+   Copyright: Hugging Face, Inc. and contributors
+   License: Apache-2.0
+   Upstream:
+   - https://github.com/huggingface/tokenizers
+   License file:
+   - licenses\Apache-2.0-tokenizers.txt
+
+7. pydantic 2.12.5
+   Copyright: Pydantic Services Inc. and contributors
+   License: MIT
+   Upstream:
+   - https://github.com/pydantic/pydantic
+   License file:
+   - licenses\MIT-pydantic.txt
+
+8. onnxruntime 1.24.3
+   Copyright: Microsoft Corporation and contributors
+   License: MIT
+   Upstream:
+   - https://github.com/microsoft/onnxruntime
+   License files:
+   - licenses\MIT-onnxruntime.txt
+   - licenses\onnxruntime-ThirdPartyNotices.txt
+
+9. PyAV 16.1.0
+   Copyright: PyAV developers and contributors
+   License: BSD-3-Clause
+   Upstream:
+   - https://github.com/PyAV-Org/PyAV
+   License file:
+   - licenses\BSD-3-Clause-pyav.txt
+
+10. OpenAI Whisper
+    Copyright: OpenAI and contributors
+    License: MIT
+    Upstream:
+    - https://github.com/openai/whisper
+    License file:
+    - licenses\MIT-openai-whisper.txt
+
+11. Systran/faster-whisper-small model
+    Copyright: Original model and conversion authors
+    License: MIT (model card metadata)
+    Upstream:
+    - https://huggingface.co/Systran/faster-whisper-small
+    - https://huggingface.co/openai/whisper-small
+    Notes:
+    - This package bundles the converted small model files under
+      resources\models\small.
+
+12. FFmpeg / FFprobe bundled executables
+    Download source used by this project:
+    - https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+    Upstream project:
+    - https://ffmpeg.org
+    License information:
+    - https://ffmpeg.org/legal.html
+    Notes:
+    - The build currently downloaded by scripts\download_bundle_assets.ps1 is
+      the gyan.dev "release-essentials" Windows build.
+    - The provider states that these builds are 64-bit, static, and GPLv3.
+    - See licenses\GPL-3.0.txt.
+    - If you redistribute these binaries, verify that you satisfy the source
+      code and notice obligations applicable to the exact binaries you ship.
+
+13. yt-dlp bundled executable
+    Download source used by this project:
+    - https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+    Upstream project:
+    - https://github.com/yt-dlp/yt-dlp
+    License information:
+    - Source repository license file: licenses\UNLICENSE-yt-dlp-source.txt
+    Notes:
+    - The official repository notes that the PyInstaller-bundled executable
+      includes GPLv3+ licensed code.
+    - See licenses\GPL-3.0.txt.
+    - If you redistribute the bundled executable, verify that you satisfy the
+      notice and source code obligations applicable to that binary release.
+
+Redistribution notes
+--------------------
+
+1. This application package includes open-source components under permissive
+   licenses (MIT, Apache-2.0, BSD-3-Clause) and copyleft licenses (LGPL/GPL).
+2. Your own source code license is separate from the licenses of these bundled
+   third-party components.
+3. The presence of GPL/LGPL components means your EULA and distribution method
+   must not remove rights granted by those licenses to the covered components.
+4. Before public redistribution, re-check the current upstream licenses and the
+   exact binaries or model snapshots you are shipping.
