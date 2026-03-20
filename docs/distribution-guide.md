@@ -7,7 +7,7 @@ Windows 用 installer に以下を同梱して配布します。
 - `ffmpeg.exe`
 - `ffprobe.exe`
 - `yt-dlp.exe`
-- Whisper `small` モデル
+- Whisper `base` / `small` モデル
 - SpeechBrain 話者埋め込みモデル
 - 第三者ライセンス文書
 
@@ -17,6 +17,7 @@ GitHub には以下の実体を含めません。
 - `build/`
 - `data/`
 - `resources/bin/*.exe`
+- `resources/models/base/*`
 - `resources/models/small/*`
 
 必要な外部資材はビルド前に取得します。
@@ -34,6 +35,7 @@ powershell -ExecutionPolicy Bypass -File scripts\download_bundle_assets.ps1
 - `resources/bin/ffmpeg.exe`
 - `resources/bin/ffprobe.exe`
 - `resources/bin/yt-dlp.exe`
+- `resources/models/base/model.bin`
 - `resources/models/small/model.bin`
 - `resources/models/speechbrain-spkrec-ecapa-voxceleb/hyperparams.yaml` ほか一式
 

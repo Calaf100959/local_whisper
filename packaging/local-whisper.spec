@@ -11,6 +11,7 @@ project_root = Path.cwd()
 datas = [
     (str(project_root / "resources" / "bin"), "resources/bin"),
     (str(project_root / "resources" / "models" / "README.md"), "resources/models"),
+    (str(project_root / "resources" / "models" / "base"), "resources/models/base"),
     (str(project_root / "resources" / "models" / "small"), "resources/models/small"),
     (
         str(project_root / "resources" / "models" / "speechbrain-spkrec-ecapa-voxceleb"),
@@ -21,6 +22,8 @@ binaries = []
 hiddenimports = [
     "logging.config",
     "logging.handlers",
+    "PySide6.QtMultimedia",
+    "PySide6.QtMultimediaWidgets",
 ]
 
 try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import unittest
 from pathlib import Path
 import shutil
@@ -99,7 +100,14 @@ class ServiceTests(unittest.TestCase):
         service = JobService(self.settings)
 
         with self.assertRaises(ValueError):
-            service.create_job(input_type="audio", source_name="sample.wav", model_size="base")
+            service.create_job(input_type="audio", source_name="sample.wav", model_size="tiny")
+
+    def test_job_service_accepts_base_model_size(self) -> None:
+        service = JobService(self.settings)
+
+        job = service.create_job(input_type="audio", source_name="sample.wav", model_size="base")
+
+        self.assertEqual(job.model_size, "base")
 
     def test_media_service_validation_and_save(self) -> None:
         service = MediaService(self.settings)
@@ -281,6 +289,31 @@ class ServiceTests(unittest.TestCase):
         normalized = service._normalize_cluster_labels([4, 4, 1, 7, 1])
 
         self.assertEqual(normalized, [0, 0, 1, 2, 1])
+
+    def test_diarization_service_loads_vad_model_from_bytes(self) -> None:
+        service = DiarizationService(self.settings)
+        fake_model = SimpleNamespace(eval=lambda: None)
+        captured = {}
+
+        def fake_jit_load(buffer: io.BytesIO, map_location: str):
+            captured["buffer_type"] = type(buffer)
+            captured["model_bytes"] = buffer.read()
+            captured["map_location"] = map_location
+            return fake_model
+
+        fake_torch = SimpleNamespace(
+            jit=SimpleNamespace(load=fake_jit_load),
+            device=lambda name: name,
+        )
+
+        with patch.object(service, "_read_vad_model_bytes", return_value=b"jit-model-bytes"):
+            with patch("app.services.diarization_service.import_module", return_value=fake_torch):
+                model = service._load_vad_model()
+
+        self.assertIs(model, fake_model)
+        self.assertIs(captured["buffer_type"], io.BytesIO)
+        self.assertEqual(captured["model_bytes"], b"jit-model-bytes")
+        self.assertEqual(captured["map_location"], "cpu")
 
 
 if __name__ == "__main__":

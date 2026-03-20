@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib import import_module
+from importlib import resources as importlib_resources
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -127,16 +129,24 @@ class DiarizationService:
             return self._vad_model
 
         try:
-            silero_vad = import_module("silero_vad")
-            self._vad_model = silero_vad.load_silero_vad()
+            torch = import_module("torch")
+            model_bytes = self._read_vad_model_bytes()
+            self._vad_model = torch.jit.load(BytesIO(model_bytes), map_location=torch.device("cpu"))
+            self._vad_model.eval()
         except ModuleNotFoundError as exc:
-            logger.exception("silero-vad import failed")
+            logger.exception("Silero VAD dependencies are unavailable")
             raise DiarizationError("Speaker diarization dependencies are not installed.") from exc
         except Exception as exc:  # pragma: no cover - external library errors vary
             logger.exception("Failed to load Silero VAD model")
             raise DiarizationError("話者分離用の VAD モデル読み込みに失敗しました。") from exc
 
         return self._vad_model
+
+    @staticmethod
+    def _read_vad_model_bytes() -> bytes:
+        resource = importlib_resources.files("silero_vad.data").joinpath("silero_vad.jit")
+        with resource.open("rb") as stream:
+            return stream.read()
 
     def _extract_embeddings(
         self,

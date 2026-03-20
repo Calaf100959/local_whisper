@@ -16,9 +16,11 @@ New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 $ffmpegZipPath = Join-Path $tempDir "ffmpeg-release-essentials.zip"
 $ffmpegExtractDir = Join-Path $tempDir "ffmpeg"
 $ytDlpPath = Join-Path $resourcesBinDir "yt-dlp.exe"
-$modelTargetDir = Join-Path $resourcesModelsDir "small"
+$baseModelTargetDir = Join-Path $resourcesModelsDir "base"
+$smallModelTargetDir = Join-Path $resourcesModelsDir "small"
 $diarizationModelTargetDir = Join-Path $resourcesModelsDir "speechbrain-spkrec-ecapa-voxceleb"
-New-Item -ItemType Directory -Force -Path $modelTargetDir | Out-Null
+New-Item -ItemType Directory -Force -Path $baseModelTargetDir | Out-Null
+New-Item -ItemType Directory -Force -Path $smallModelTargetDir | Out-Null
 
 Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZipPath
 if (Test-Path $ffmpegExtractDir) {
@@ -40,8 +42,12 @@ if (-not (Test-Path $pythonExe)) {
     throw "Python virtual environment was not found: $pythonExe"
 }
 
-if (-not (Test-Path (Join-Path $modelTargetDir "model.bin"))) {
-    & $pythonExe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Systran/faster-whisper-small', local_dir=r'$modelTargetDir')"
+if (-not (Test-Path (Join-Path $baseModelTargetDir "model.bin"))) {
+    & $pythonExe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Systran/faster-whisper-base', local_dir=r'$baseModelTargetDir')"
+}
+
+if (-not (Test-Path (Join-Path $smallModelTargetDir "model.bin"))) {
+    & $pythonExe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Systran/faster-whisper-small', local_dir=r'$smallModelTargetDir')"
 }
 
 if (-not (Test-Path (Join-Path $diarizationModelTargetDir "hyperparams.yaml"))) {
@@ -52,7 +58,8 @@ if (-not (Test-Path (Join-Path $diarizationModelTargetDir "hyperparams.yaml"))) 
 Write-Host ""
 Write-Host "Bundled assets are ready."
 Write-Host "FFmpeg binaries: $resourcesBinDir"
-Write-Host "Whisper model:  $modelTargetDir"
+Write-Host "Whisper base model:  $baseModelTargetDir"
+Write-Host "Whisper small model: $smallModelTargetDir"
 if (Test-Path (Join-Path $diarizationModelTargetDir "hyperparams.yaml")) {
     Write-Host "Diarization model: $diarizationModelTargetDir"
 } else {

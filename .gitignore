@@ -14,9 +14,11 @@ pytest_tmp/
 pytest-cache-files-*/
 
 resources/bin/*.exe
+resources/models/base/*
 resources/models/small/*
 resources/models/speaker-diarization-community-1/*
 resources/models/speechbrain-spkrec-ecapa-voxceleb/*
+!resources/models/base/.gitkeep
 !resources/models/small/.gitkeep
 !resources/bin/README.md
 !resources/models/README.md

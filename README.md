@@ -6,7 +6,7 @@ Windows 向けのローカル文字起こしデスクトップアプリです。
 - 音声入力: `.mp3` / `.wav` / `.m4a`
 - 動画入力: `.mp4` / `.mov` / `.mkv`
 - YouTube URL 入力
-- Whisper `small` モデルを使った文字起こし
+- Whisper `base` / `small` モデルを使った文字起こし
 - 長尺ファイルのチャンク分割処理
 - 進捗表示、完了予定時刻表示、途中停止
 - 音声/動画ファイルのドラッグ＆ドロップ入力
@@ -48,6 +48,7 @@ powershell -ExecutionPolicy Bypass -File scripts\download_bundle_assets.ps1
 - `resources/bin/ffmpeg.exe`
 - `resources/bin/ffprobe.exe`
 - `resources/bin/yt-dlp.exe`
+- `resources/models/base/model.bin`
 - `resources/models/small/model.bin`
 - `resources/models/speechbrain-spkrec-ecapa-voxceleb/hyperparams.yaml` ほか一式
 
@@ -81,7 +82,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1
 2. 入力方式を選ぶ
 3. ファイルまたは YouTube URL を指定する
    ローカルファイルはウィンドウへドラッグ＆ドロップでも指定できます
-4. 言語を選ぶ（Whisper モデルは `small` 固定）
+4. モデルと言語を選ぶ
 5. 必要に応じて `話者分離を有効化` と `話者数` を設定する
 6. `文字起こし開始` を押す
 7. 結果を確認する。必要に応じて `結果ファイルを出力する` で `.txt` / `.srt` / `.json` を別の場所へコピーする
@@ -105,5 +106,5 @@ py -m unittest discover -s tests -p "*_unittest.py" -v
 - YouTube 入力はネット接続が必要です
 - 話者分離は `Silero VAD + SpeechBrain + clustering` で動作します
 - GPU 対応は未実装です
-- 配布版には第三者ソフトウェアとモデルが含まれます。詳細は `THIRD_PARTY_LICENSES.txt` と `licenses/` を参照してください
+- 配布版には第三者ソフトウェアと `base` / `small` モデルが含まれます。詳細は `THIRD_PARTY_LICENSES.txt` と `licenses/` を参照してください
 - installer では `EULA.txt` に基づく利用規約同意ページを表示します

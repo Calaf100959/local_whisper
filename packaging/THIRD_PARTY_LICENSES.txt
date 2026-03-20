@@ -155,7 +155,17 @@ Key bundled components
     License file:
     - licenses\MIT-openai-whisper.txt
 
-17. Systran/faster-whisper-small model
+17. Systran/faster-whisper-base model
+    Copyright: Original model and conversion authors
+    License: MIT (model card metadata)
+    Upstream:
+    - https://huggingface.co/Systran/faster-whisper-base
+    - https://huggingface.co/openai/whisper-base
+    Notes:
+    - This package bundles the converted base model files under
+      resources\models\base.
+
+18. Systran/faster-whisper-small model
     Copyright: Original model and conversion authors
     License: MIT (model card metadata)
     Upstream:
@@ -165,7 +175,7 @@ Key bundled components
     - This package bundles the converted small model files under
       resources\models\small.
 
-18. FFmpeg / FFprobe bundled executables
+19. FFmpeg / FFprobe bundled executables
     Download source used by this project:
     - https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
     Upstream project:

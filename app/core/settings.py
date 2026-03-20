@@ -33,8 +33,9 @@ class Settings:
         "m.youtube.com",
         "youtu.be",
     )
-    supported_model_sizes: tuple[str, ...] = ("small",)
+    supported_model_sizes: tuple[str, ...] = ("base", "small")
     default_model_size: str = "small"
+    default_realtime_model_size: str = "base"
     default_language: str = "ja"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
