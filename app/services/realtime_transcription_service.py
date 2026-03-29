@@ -75,6 +75,7 @@ class RealtimeTranscriptionService:
         self.settings = settings or get_settings()
         self.transcription_service = transcription_service or TranscriptionService(self.settings)
         self._model_loader = model_loader or self.transcription_service.load_model
+        self._uses_default_transcribe_runner = transcribe_runner is None
         self._transcribe_runner = transcribe_runner or self._default_transcribe_runner
         self.target_sample_rate = target_sample_rate or self.settings.diarization_sample_rate
         self.window_seconds = max(1.0, float(window_seconds))
@@ -160,7 +161,7 @@ class RealtimeTranscriptionService:
             return self._build_snapshot(language=language, is_final=force_final)
         prepared_audio = self._prepare_audio_for_transcription(window_audio)
 
-        output = self._run_transcription(model, prepared_audio, language=language)
+        output = self._run_transcription(model, prepared_audio, language=language, model_size=model_size)
         current_language = output.language or language or self._language
         commit_cutoff_seconds = self._stream_position_seconds if force_final else max(
             self._committed_until_seconds,
@@ -272,9 +273,19 @@ class RealtimeTranscriptionService:
         self._model_cache[cache_key] = model
         return model
 
-    def _run_transcription(self, model: Any, audio: np.ndarray, *, language: str | None) -> _TranscriptionOutput:
+    def _run_transcription(
+        self,
+        model: Any,
+        audio: np.ndarray,
+        *,
+        language: str | None,
+        model_size: str | None,
+    ) -> _TranscriptionOutput:
         try:
-            raw_result = self._transcribe_runner(model, audio, language)
+            if self._uses_default_transcribe_runner:
+                raw_result = self._transcribe_runner(model, audio, language, model_size)
+            else:
+                raw_result = self._transcribe_runner(model, audio, language)
         except Exception as exc:  # pragma: no cover - dependency specific
             logger.exception("Realtime transcription failed")
             raise RealtimeTranscriptionError("Realtime transcription failed.") from exc
@@ -436,11 +447,18 @@ class RealtimeTranscriptionService:
             return prepared
         return np.clip(prepared * gain, -0.98, 0.98).astype(np.float32, copy=False)
 
-    @staticmethod
-    def _default_transcribe_runner(model: Any, audio: np.ndarray, language: str | None) -> Any:
+    def _default_transcribe_runner(
+        self,
+        model: Any,
+        audio: np.ndarray,
+        language: str | None,
+        model_size: str | None,
+    ) -> Any:
+        model_spec = self.settings.get_whisper_model_spec(model_size)
         return model.transcribe(
             audio,
             language=language,
             vad_filter=False,
             word_timestamps=False,
+            condition_on_previous_text=model_spec.condition_on_previous_text,
         )

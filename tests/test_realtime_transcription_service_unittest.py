@@ -9,6 +9,7 @@ from app.services.realtime_transcription_service import (
     RealtimeTranscriptionError,
     RealtimeTranscriptionService,
 )
+from app.core.settings import Settings
 
 
 def make_float32_bytes(seconds: float, sample_rate: int = 16000, value: float = 0.0) -> bytes:
@@ -189,6 +190,41 @@ class RealtimeTranscriptionServiceTests(unittest.TestCase):
         self.assertIsNotNone(third)
         self.assertEqual(len(calls), 2)
         self.assertGreater(float(np.max(np.abs(calls[0]))), 0.01)
+
+    def test_default_runner_uses_model_specific_decode_options(self) -> None:
+        captured_kwargs: dict[str, object] = {}
+
+        class FakeModel:
+            def transcribe(self, audio: np.ndarray, **kwargs):
+                captured_kwargs.update(kwargs)
+                return [SimpleNamespace(start=0.0, end=0.5, text="ok")], SimpleNamespace(language="ja")
+
+        service = RealtimeTranscriptionService(
+            settings=Settings(),
+            model_loader=lambda model_size: FakeModel(),
+            min_chunk_seconds=0.25,
+        )
+
+        snapshot = service.append_audio_chunk(
+            make_float32_bytes(0.5, value=0.01),
+            sample_rate=16000,
+            channel_count=1,
+            sample_format="Float",
+            language="ja",
+            model_size="kotoba-whisper-v2.0-faster",
+            force_transcribe=True,
+        )
+
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(
+            captured_kwargs,
+            {
+                "language": "ja",
+                "vad_filter": False,
+                "word_timestamps": False,
+                "condition_on_previous_text": False,
+            },
+        )
 
 
 if __name__ == "__main__":

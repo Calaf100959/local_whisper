@@ -11,6 +11,49 @@ from app.core.runtime import (
     get_resource_root,
     get_user_data_root,
 )
+from app.models.whisper_model import WhisperModelSpec
+
+
+def _default_whisper_model_catalog() -> tuple[WhisperModelSpec, ...]:
+    return (
+        WhisperModelSpec(
+            model_id="base",
+            label="base（高速）",
+            repo_id="Systran/faster-whisper-base",
+            local_dir_name="base",
+            bundled=True,
+            downloadable=False,
+            requires_notice=False,
+            batch_supported=True,
+            realtime_supported=True,
+            model_card_url="https://huggingface.co/Systran/faster-whisper-base",
+        ),
+        WhisperModelSpec(
+            model_id="small",
+            label="small（高精度）",
+            repo_id="Systran/faster-whisper-small",
+            local_dir_name="small",
+            bundled=True,
+            downloadable=False,
+            requires_notice=False,
+            batch_supported=True,
+            realtime_supported=True,
+            model_card_url="https://huggingface.co/Systran/faster-whisper-small",
+        ),
+        WhisperModelSpec(
+            model_id="kotoba-whisper-v2.0-faster",
+            label="kotoba-ja（追加DL）",
+            repo_id="kotoba-tech/kotoba-whisper-v2.0-faster",
+            local_dir_name="kotoba-whisper-v2.0-faster",
+            bundled=False,
+            downloadable=True,
+            requires_notice=True,
+            batch_supported=True,
+            realtime_supported=True,
+            model_card_url="https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0-faster",
+            condition_on_previous_text=False,
+        ),
+    )
 
 
 @dataclass(slots=True, frozen=True)
@@ -23,6 +66,7 @@ class Settings:
     outputs_dir: Path = field(default_factory=lambda: get_user_data_root() / "outputs")
     temp_dir: Path = field(default_factory=lambda: get_user_data_root() / "temp")
     downloaded_models_dir: Path = field(default_factory=lambda: get_user_data_root() / "models")
+    huggingface_home_dir: Path = field(default_factory=lambda: get_user_data_root() / "huggingface")
     bundled_bin_dir: Path = field(default_factory=lambda: get_resource_root() / "bin")
     bundled_models_dir: Path = field(default_factory=lambda: get_resource_root() / "models")
     supported_audio_extensions: tuple[str, ...] = (".mp3", ".wav", ".m4a")
@@ -33,7 +77,8 @@ class Settings:
         "m.youtube.com",
         "youtu.be",
     )
-    supported_model_sizes: tuple[str, ...] = ("base", "small")
+    whisper_model_catalog: tuple[WhisperModelSpec, ...] = field(default_factory=_default_whisper_model_catalog)
+    supported_model_sizes: tuple[str, ...] = field(init=False)
     default_model_size: str = "small"
     default_realtime_model_size: str = "base"
     default_language: str = "ja"
@@ -55,6 +100,8 @@ class Settings:
     required_directories: tuple[Path, ...] = field(init=False)
 
     def __post_init__(self) -> None:
+        supported_model_sizes = tuple(model.model_id for model in self.whisper_model_catalog)
+        object.__setattr__(self, "supported_model_sizes", supported_model_sizes)
         object.__setattr__(
             self,
             "required_directories",
@@ -64,6 +111,7 @@ class Settings:
                 self.outputs_dir,
                 self.temp_dir,
                 self.downloaded_models_dir,
+                self.huggingface_home_dir,
             ),
         )
 
@@ -75,7 +123,18 @@ class Settings:
         return self.bundled_bin_dir / binary_name
 
     def bundled_model_path(self, model_size: str) -> Path:
-        return self.bundled_models_dir / self.normalize_model_size(model_size)
+        model_spec = self.get_whisper_model_spec(model_size)
+        return self.bundled_models_dir / model_spec.local_dir_name
+
+    def downloaded_model_path(self, model_size: str) -> Path:
+        model_spec = self.get_whisper_model_spec(model_size)
+        return self.downloaded_models_dir / model_spec.local_dir_name
+
+    def model_consent_path(self) -> Path:
+        return self.data_dir / "model-consents.json"
+
+    def huggingface_cache_dir(self) -> Path:
+        return self.huggingface_home_dir / "hub"
 
     def bundled_diarization_model_path(self) -> Path:
         return self.bundled_models_dir / self.diarization_model_dir_name
@@ -89,6 +148,19 @@ class Settings:
             supported = ", ".join(self.supported_model_sizes)
             raise ValueError(f"Unsupported model size: {requested}. Supported values: {supported}")
         return requested
+
+    def get_whisper_model_spec(self, model_size: str | None) -> WhisperModelSpec:
+        normalized_model_size = self.normalize_model_size(model_size)
+        for model_spec in self.whisper_model_catalog:
+            if model_spec.model_id == normalized_model_size:
+                return model_spec
+        raise ValueError(f"Whisper model definition was not found: {normalized_model_size}")
+
+    def list_batch_model_specs(self) -> tuple[WhisperModelSpec, ...]:
+        return tuple(model for model in self.whisper_model_catalog if model.batch_supported)
+
+    def list_realtime_model_specs(self) -> tuple[WhisperModelSpec, ...]:
+        return tuple(model for model in self.whisper_model_catalog if model.realtime_supported)
 
 
 @lru_cache(maxsize=1)

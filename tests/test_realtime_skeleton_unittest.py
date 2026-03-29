@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from app.desktop.realtime_panel import RealtimePanel
 from app.desktop.realtime_worker_thread import RealtimeWorkerThread
 from app.models.realtime_session import RealtimeSession, RealtimeSessionStatus
 from app.services.realtime_transcription_service import RealtimeTranscriptionSnapshot
@@ -102,6 +103,9 @@ class RealtimeSkeletonTests(unittest.TestCase):
         self.assertTrue(hasattr(RealtimeWorkerThread, "level_updated"))
         self.assertTrue(hasattr(RealtimeWorkerThread, "finished_with_result"))
         self.assertTrue(hasattr(RealtimeWorkerThread, "failed_with_error"))
+
+    def test_realtime_panel_exposes_open_output_signal(self) -> None:
+        self.assertTrue(hasattr(RealtimePanel, "open_output_directory_requested"))
 
     def test_realtime_worker_result_structure(self) -> None:
         session = RealtimeSession(session_id="session_003")

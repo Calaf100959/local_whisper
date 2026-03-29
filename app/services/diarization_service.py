@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from importlib import import_module
 from importlib import resources as importlib_resources
 from io import BytesIO
+import os
 from pathlib import Path
 from typing import Any
 
@@ -228,6 +229,11 @@ class DiarizationService:
 
     def _download_embedding_model_snapshot(self, target_dir: Path) -> None:
         target_dir.parent.mkdir(parents=True, exist_ok=True)
+        self.settings.huggingface_home_dir.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("HF_HOME", str(self.settings.huggingface_home_dir))
+        os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+        os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        self._disable_huggingface_progress_bars()
 
         try:
             huggingface_hub = import_module("huggingface_hub")
@@ -245,6 +251,16 @@ class DiarizationService:
 
         if not self._is_ready_model_directory(target_dir):
             raise DiarizationError("話者分離用の埋め込みモデル取得が完了しませんでした。")
+
+    @staticmethod
+    def _disable_huggingface_progress_bars() -> None:
+        try:
+            huggingface_hub_utils = import_module("huggingface_hub.utils")
+            disable_progress_bars = getattr(huggingface_hub_utils, "disable_progress_bars", None)
+            if callable(disable_progress_bars):
+                disable_progress_bars()
+        except Exception:
+            logger.debug("Failed to disable Hugging Face progress bars before diarization model download.", exc_info=True)
 
     def _cluster_embeddings(
         self,

@@ -210,9 +210,17 @@ class ServiceTests(unittest.TestCase):
             SimpleNamespace(start=4.0, end=8.0, text="後半"),
         ]
         fake_info = SimpleNamespace(language="ja", duration=12.0)
+        captured_kwargs: dict[str, object] = {}
 
         class FakeModel:
-            def transcribe(self, audio: str, language: str | None = None):
+            def transcribe(
+                self,
+                audio: str,
+                language: str | None = None,
+                condition_on_previous_text: bool = True,
+            ):
+                captured_kwargs["language"] = language
+                captured_kwargs["condition_on_previous_text"] = condition_on_previous_text
                 return iter(fake_segments), fake_info
 
         with patch.object(service, "load_model", return_value=FakeModel()):
@@ -233,6 +241,35 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(updated_job.processed_seconds, 8.0)
         self.assertEqual(updated_job.total_seconds, 12.0)
         self.assertIsNotNone(updated_job.transcription_started_at)
+        self.assertEqual(captured_kwargs, {"language": "ja", "condition_on_previous_text": True})
+
+    def test_transcription_service_uses_model_specific_decode_options(self) -> None:
+        source_path = self.root / "sample.wav"
+        source_path.write_bytes(b"audio")
+        service = TranscriptionService(self.settings)
+        fake_info = SimpleNamespace(language="ja", duration=12.0)
+        captured_kwargs: dict[str, object] = {}
+
+        class FakeModel:
+            def transcribe(
+                self,
+                audio: str,
+                language: str | None = None,
+                condition_on_previous_text: bool = True,
+            ):
+                captured_kwargs["language"] = language
+                captured_kwargs["condition_on_previous_text"] = condition_on_previous_text
+                return iter([SimpleNamespace(start=0.0, end=1.0, text="ok")]), fake_info
+
+        with patch.object(service, "load_model", return_value=FakeModel()):
+            result = service.transcribe_file(
+                source_path,
+                model_size="kotoba-whisper-v2.0-faster",
+                language="ja",
+            )
+
+        self.assertEqual(result.text, "ok")
+        self.assertEqual(captured_kwargs, {"language": "ja", "condition_on_previous_text": False})
 
     def test_speaker_assignment_service_assigns_max_overlap_speaker(self) -> None:
         service = SpeakerAssignmentService()

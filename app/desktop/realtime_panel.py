@@ -19,6 +19,7 @@ class RealtimePanel(QGroupBox):
     pause_requested = Signal()
     resume_requested = Signal()
     stop_requested = Signal()
+    open_output_directory_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__("リアルタイム入力")
@@ -66,20 +67,14 @@ class RealtimePanel(QGroupBox):
         self.pause_button = QPushButton("一時停止")
         self.resume_button = QPushButton("再開")
         self.stop_button = QPushButton("停止")
+        self.open_output_dir_button = QPushButton("ファイルを確認する")
         button_row.addWidget(self.start_button)
         button_row.addWidget(self.pause_button)
         button_row.addWidget(self.resume_button)
         button_row.addWidget(self.stop_button)
+        button_row.addWidget(self.open_output_dir_button)
         button_row.addStretch(1)
         layout.addLayout(button_row)
-
-        self.note_label = QLabel(
-            "v0.2.0 ではマイク入力のリアルタイム文字起こしを追加予定です。"
-            " この画面は先行して UI の土台を分離したものです。"
-        )
-        self.note_label.setWordWrap(True)
-        self.note_label.setStyleSheet("color: #5f6c66;")
-        layout.addWidget(self.note_label)
 
     def _wire_events(self) -> None:
         self.refresh_button.clicked.connect(self.refresh_devices_requested.emit)
@@ -87,6 +82,7 @@ class RealtimePanel(QGroupBox):
         self.pause_button.clicked.connect(self.pause_requested.emit)
         self.resume_button.clicked.connect(self.resume_requested.emit)
         self.stop_button.clicked.connect(self.stop_requested.emit)
+        self.open_output_dir_button.clicked.connect(self.open_output_directory_requested.emit)
 
     def set_devices(self, device_names: list[str], *, selected_name: str | None = None) -> None:
         self.device_combo.clear()

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFileDialog,
     QGridLayout,
@@ -32,6 +34,7 @@ from app.models.realtime_session import RealtimeSession, RealtimeSessionStatus
 from app.services.audio_capture_service import AudioCaptureError, AudioCaptureService, AudioCaptureStatus
 from app.services.job_service import JobService
 from app.services.media_service import InputType, MediaService
+from app.services.model_download_service import ModelDownloadError, ModelDownloadService
 from app.services.result_service import OutputFormat, ResultService
 from app.workers.realtime_worker import RealtimeWorker, RealtimeWorkerResult
 from app.desktop.realtime_worker_thread import RealtimeWorkerThread
@@ -59,6 +62,7 @@ class MainWindow(QMainWindow):
         self.media_service = MediaService()
         self.transcription_worker = TranscriptionWorker(job_service=self.job_service)
         self.audio_capture_service = AudioCaptureService(parent=self)
+        self.model_download_service = ModelDownloadService(self.job_service.settings)
         self.result_service = ResultService(self.job_service.settings)
         self.outputs_dir = self.job_service.settings.outputs_dir
         self.worker_thread: DesktopWorkerThread | None = None
@@ -109,16 +113,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._build_result_group(), stretch=1)
 
     def _configure_model_selectors(self) -> None:
-        model_options = self._model_options()
         self.batch_model_combo.clear()
-        for label, value in model_options:
-            self.batch_model_combo.addItem(label, value)
+        for model_spec in self.job_service.settings.list_batch_model_specs():
+            self.batch_model_combo.addItem(model_spec.label, model_spec.model_id)
         batch_index = self.batch_model_combo.findData(self.job_service.settings.default_model_size)
         if batch_index >= 0:
             self.batch_model_combo.setCurrentIndex(batch_index)
 
         self.realtime_panel.set_models(
-            model_options,
+            [(model_spec.label, model_spec.model_id) for model_spec in self.job_service.settings.list_realtime_model_specs()],
             selected_value=self.job_service.settings.default_realtime_model_size,
         )
 
@@ -268,6 +271,7 @@ class MainWindow(QMainWindow):
         self.realtime_panel.pause_requested.connect(self.pause_realtime_transcription)
         self.realtime_panel.resume_requested.connect(self.resume_realtime_transcription)
         self.realtime_panel.stop_requested.connect(self.stop_realtime_transcription)
+        self.realtime_panel.open_output_directory_requested.connect(self.open_output_directory)
         self.audio_capture_service.devices_changed.connect(self._on_realtime_devices_changed)
         self.audio_capture_service.status_changed.connect(self._on_realtime_status_changed)
         self.audio_capture_service.level_changed.connect(self.realtime_panel.set_level)
@@ -356,6 +360,10 @@ class MainWindow(QMainWindow):
             source, input_type = self._resolve_source()
         except Exception as exc:
             self.show_error(to_user_message(exc))
+            return
+
+        selected_model_size = self.batch_model_combo.currentData()
+        if not self._ensure_model_ready(selected_model_size):
             return
 
         if not self._confirm_start():
@@ -459,6 +467,100 @@ class MainWindow(QMainWindow):
         self._set_app_mode_switch_enabled(True)
         self.show_error(user_message)
         self.refresh_job_status()
+
+    def _ensure_model_ready(self, model_id: str | None) -> bool:
+        if model_id is None:
+            return True
+
+        model_spec = self.job_service.settings.get_whisper_model_spec(model_id)
+        if not model_spec.downloadable:
+            return True
+        if self.model_download_service.is_model_downloaded(model_spec.model_id):
+            return True
+        if self._has_model_consent(model_spec.model_id):
+            return self._download_optional_model(model_spec.model_id)
+        return self._prompt_optional_model_download(model_spec.model_id)
+
+    def _prompt_optional_model_download(self, model_id: str) -> bool:
+        model_spec = self.job_service.settings.get_whisper_model_spec(model_id)
+        while True:
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle("追加モデルの取得")
+            dialog.setIcon(QMessageBox.Icon.Information)
+            dialog.setText(f"追加モデル「{model_spec.label}」を利用するには、別途ダウンロードが必要です。")
+            dialog.setInformativeText(
+                "\n".join(
+                    [
+                        f"配布元: {model_spec.repo_id or '-'}",
+                        "このモデルはアプリ本体には同梱されていません。",
+                        "利用前に配布元の notice とモデルカードを確認してください。",
+                        "商用利用や再配布の可否は、利用者ご自身で条件確認をお願いします。",
+                    ]
+                )
+            )
+            open_card_button = dialog.addButton("モデルカードを開く", QMessageBox.ButtonRole.ActionRole)
+            agree_button = dialog.addButton("同意してダウンロード", QMessageBox.ButtonRole.AcceptRole)
+            dialog.addButton(QMessageBox.StandardButton.Cancel)
+            dialog.setDefaultButton(agree_button)
+            dialog.exec()
+            clicked_button = dialog.clickedButton()
+
+            if clicked_button is open_card_button:
+                if model_spec.model_card_url:
+                    QDesktopServices.openUrl(QUrl(model_spec.model_card_url))
+                continue
+            if clicked_button is agree_button:
+                self._save_model_consent(model_spec.model_id)
+                return self._download_optional_model(model_spec.model_id)
+            return False
+
+    def _download_optional_model(self, model_id: str) -> bool:
+        model_spec = self.job_service.settings.get_whisper_model_spec(model_id)
+        previous_status = self.status_value.text()
+        self.status_value.setText("モデル取得中")
+        self.show_warning(f"追加モデル「{model_spec.label}」をダウンロードしています。")
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
+        try:
+            self.model_download_service.download_model(model_spec.model_id)
+        except ModelDownloadError as exc:
+            self.status_value.setText(previous_status)
+            self.show_error(to_user_message(exc))
+            return False
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self.status_value.setText(previous_status)
+        self.show_warning(f"追加モデル「{model_spec.label}」を取得しました。")
+        return True
+
+    def _load_model_consents(self) -> set[str]:
+        consent_path = self.job_service.settings.model_consent_path()
+        if not consent_path.exists():
+            return set()
+
+        try:
+            payload = json.loads(consent_path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+
+        accepted_model_ids = payload.get("accepted_model_ids", [])
+        if not isinstance(accepted_model_ids, list):
+            return set()
+        return {str(model_id).strip().lower() for model_id in accepted_model_ids if str(model_id).strip()}
+
+    def _save_model_consent(self, model_id: str) -> None:
+        accepted_model_ids = self._load_model_consents()
+        accepted_model_ids.add(model_id.strip().lower())
+        consent_path = self.job_service.settings.model_consent_path()
+        consent_path.parent.mkdir(parents=True, exist_ok=True)
+        consent_path.write_text(
+            json.dumps({"accepted_model_ids": sorted(accepted_model_ids)}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _has_model_consent(self, model_id: str) -> bool:
+        return model_id.strip().lower() in self._load_model_consents()
 
     def stop_transcription(self) -> None:
         if not self.current_job_id:
@@ -564,6 +666,9 @@ class MainWindow(QMainWindow):
         self.result_text.setPlainText("")
         self.current_realtime_session_id = self.job_service.generate_job_id().replace("job_", "realtime_", 1)
         selected_model_size = self.realtime_panel.selected_model_size() or self.job_service.settings.default_realtime_model_size
+        if not self._ensure_model_ready(selected_model_size):
+            self.status_value.setText("待機中")
+            return
         worker = RealtimeWorker()
         realtime_session = RealtimeSession(
             session_id=self.current_realtime_session_id,
@@ -832,10 +937,3 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _parse_datetime(value: datetime) -> datetime:
         return value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
-
-    @staticmethod
-    def _model_options() -> list[tuple[str, str]]:
-        return [
-            ("base（高速）", "base"),
-            ("small（高精度）", "small"),
-        ]

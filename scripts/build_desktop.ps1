@@ -61,6 +61,8 @@ if (-not $SkipTests) {
 
 $distRoot = Join-Path $repoRoot "dist\LocalWhisperTranscriber"
 $distLicenseDirectoryPath = Join-Path $distRoot "licenses"
+$distPyAvDirectoryPath = Join-Path $distRoot "_internal\av"
+$distPyAvLibsDirectoryPath = Join-Path $distRoot "_internal\av.libs"
 Copy-Item -Path $distributionReadmePath -Destination (Join-Path $distRoot "README.txt") -Force
 Copy-Item -Path $eulaPath -Destination (Join-Path $distRoot "EULA.txt") -Force
 Copy-Item -Path $thirdPartyNoticesPath -Destination (Join-Path $distRoot "THIRD_PARTY_LICENSES.txt") -Force
@@ -68,6 +70,17 @@ if (Test-Path $distLicenseDirectoryPath) {
     Remove-Item -Path $distLicenseDirectoryPath -Recurse -Force
 }
 Copy-Item -Path $licenseDirectoryPath -Destination $distLicenseDirectoryPath -Recurse -Force
+
+if (-not (Test-Path $distPyAvLibsDirectoryPath)) {
+    throw "PyAV runtime libraries were not bundled: $distPyAvLibsDirectoryPath"
+}
+
+$pyAvCoreModule = @(
+    Get-ChildItem -Path $distPyAvDirectoryPath -Filter "_core*.pyd" -ErrorAction SilentlyContinue
+)
+if ($pyAvCoreModule.Count -eq 0) {
+    throw "PyAV core extension module was not bundled under: $distPyAvDirectoryPath"
+}
 
 Write-Host ""
 Write-Host "Desktop build completed."

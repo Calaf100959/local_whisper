@@ -9,6 +9,7 @@ from app.core.logging import get_logger
 from app.core.runtime import is_frozen_app
 from app.core.settings import Settings, get_settings
 from app.models.job import JobStatus
+from app.models.whisper_model import WhisperModelSpec
 from app.services.chunk_service import ChunkSegment
 from app.services.job_service import JobService
 
@@ -21,6 +22,12 @@ class TranscriptionCancelled(RuntimeError):
     def __init__(self, partial_result: "TranscriptionResult") -> None:
         super().__init__("Transcription was cancelled.")
         self.partial_result = partial_result
+
+
+class ModelDownloadRequired(TranscriptionError):
+    def __init__(self, model_spec: WhisperModelSpec) -> None:
+        super().__init__(f"Download required for model '{model_spec.model_id}'.")
+        self.model_spec = model_spec
 
 
 logger = get_logger(__name__)
@@ -88,6 +95,8 @@ class TranscriptionService:
                 device=self.settings.whisper_device,
                 compute_type=self.settings.whisper_compute_type,
             )
+        except ModelDownloadRequired:
+            raise
         except Exception as exc:  # pragma: no cover - external library errors vary
             logger.exception("Whisper model load failed: model_size=%s", requested_model_size)
             raise TranscriptionError(f"Failed to load Whisper model '{requested_model_size}'.") from exc
@@ -116,6 +125,7 @@ class TranscriptionService:
         raw_segments, info = self._collect_segments(
             model,
             path,
+            model_size=model_size,
             language=language,
             job_id=job_id,
             total_duration_seconds=total_duration_seconds,
@@ -166,6 +176,7 @@ class TranscriptionService:
             raw_segments, info = self._collect_segments(
                 model,
                 chunk_input.path,
+                model_size=model_size,
                 language=language,
                 job_id=job_id,
                 total_duration_seconds=total_duration_seconds,
@@ -207,12 +218,15 @@ class TranscriptionService:
         model: Any,
         source_path: Path,
         *,
+        model_size: str | None = None,
         language: str | None = None,
     ) -> tuple[Iterable[Any], Any]:
+        model_spec = self.settings.get_whisper_model_spec(model_size)
         try:
             segments, info = model.transcribe(
                 str(source_path),
                 language=language,
+                condition_on_previous_text=model_spec.condition_on_previous_text,
             )
         except Exception as exc:  # pragma: no cover - external library errors vary
             logger.exception("Transcription failed: source=%s language=%s", source_path, language)
@@ -225,6 +239,7 @@ class TranscriptionService:
         model: Any,
         source_path: Path,
         *,
+        model_size: str | None = None,
         language: str | None = None,
         job_id: str | None = None,
         total_duration_seconds: float | None = None,
@@ -235,7 +250,12 @@ class TranscriptionService:
         max_processed_seconds: float | None = None,
         check_cancel_during_collection: bool = True,
     ) -> tuple[list[Any], Any]:
-        raw_segments_iterable, info = self._run_transcription(model, source_path, language=language)
+        raw_segments_iterable, info = self._run_transcription(
+            model,
+            source_path,
+            model_size=model_size,
+            language=language,
+        )
         effective_total_seconds = self._resolve_total_duration_seconds(total_duration_seconds, info)
         raw_segments: list[Any] = []
 
@@ -364,11 +384,25 @@ class TranscriptionService:
 
         raise TranscriptionCancelled(partial_result or TranscriptionResult(text="", segments=[]))
 
-    def _resolve_model_source(self, model_size: str) -> str:
-        normalized_model_size = self.settings.normalize_model_size(model_size)
-        bundled_model_path = self.settings.bundled_model_path(normalized_model_size)
-        if bundled_model_path.exists():
+    def resolve_model_source(self, model_size: str | None) -> str:
+        return self._resolve_model_source(model_size)
+
+    def _resolve_model_source(self, model_size: str | None) -> str:
+        model_spec = self.settings.get_whisper_model_spec(model_size)
+        bundled_model_path = self.settings.bundled_model_path(model_spec.model_id)
+        if self._is_ready_model_directory(bundled_model_path, model_spec):
             return str(bundled_model_path)
+        downloaded_model_path = self.settings.downloaded_model_path(model_spec.model_id)
+        if self._is_ready_model_directory(downloaded_model_path, model_spec):
+            return str(downloaded_model_path)
+        if model_spec.downloadable:
+            raise ModelDownloadRequired(model_spec)
         if is_frozen_app():
-            raise TranscriptionError(f"Bundled Whisper model '{normalized_model_size}' was not found.")
-        return normalized_model_size
+            raise TranscriptionError(f"Bundled Whisper model '{model_spec.model_id}' was not found.")
+        return model_spec.model_id
+
+    @staticmethod
+    def _is_ready_model_directory(path: Path, model_spec: WhisperModelSpec) -> bool:
+        if not path.is_dir():
+            return False
+        return all((path / required_file).exists() for required_file in model_spec.required_files)
